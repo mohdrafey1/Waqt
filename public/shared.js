@@ -174,6 +174,38 @@ export function heatmap(el, days, today) {
   wrap.scrollLeft = wrap.scrollWidth;
 }
 
+// ---------- hour of day / weekday bars ----------
+export function hourBars(el, hours) {
+  const max = Math.max(1, ...hours);
+  const label = (h) => (h === 0 ? '12 am' : h < 12 ? `${h} am` : h === 12 ? '12 pm' : `${h - 12} pm`);
+  el.innerHTML =
+    `<div class="daily" style="height:130px">` +
+    hours
+      .map((s, h) => `<div class="col" data-tip="${label(h)}–${label((h + 1) % 24)} · ${esc(fmt(s))}"><div class="b" style="height:${((s / max) * 100).toFixed(2)}%;${h < 6 || h >= 18 ? 'opacity:.75' : ''}"></div></div>`)
+      .join('') +
+    `</div><div class="daily-axis"><span>12 am</span><span>6 am</span><span>12 pm</span><span>6 pm</span><span>11 pm</span></div>`;
+  attachTips(el);
+}
+
+export function weekdayBars(el, weekdays) {
+  // Monday first
+  const order = [1, 2, 3, 4, 5, 6, 0].map((i) => weekdays[i]);
+  const max = Math.max(1, ...order.map((d) => d.total_seconds));
+  el.innerHTML =
+    '<div class="bars">' +
+    order
+      .map(
+        (d) => `<div class="bar-row"><div class="top"><div class="name"><span>${esc(d.name)}</span></div><div class="val">${fmtShort(d.total_seconds)}</div></div>
+        <div class="track"><div class="fill" style="width:${Math.max((d.total_seconds / max) * 100, d.total_seconds ? 1 : 0)}%;background:var(--accent)"></div></div></div>`,
+      )
+      .join('') +
+    '</div>';
+}
+
+export function compact(n) {
+  return new Intl.NumberFormat(undefined, { notation: 'compact', maximumFractionDigits: 1 }).format(n || 0);
+}
+
 export function toast(msg) {
   const t = document.createElement('div');
   t.className = 'toast';

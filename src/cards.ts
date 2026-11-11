@@ -265,6 +265,89 @@ export function heatmapCard(days: DayTotal[], today: string, total: number, o: C
   return frame(o, w, h, body, `${title}: ${durationText(total)} in the last year`);
 }
 
+const compactNum = (n: number) => new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 }).format(n || 0);
+
+/** 24 bars for the hours of the day, plus Morning/Daytime/Evening/Night shares. */
+export function hoursCard(stats: Stats, o: CardOptions): string {
+  const w = Math.min(600, Math.max(360, o.width || 460));
+  const pad = 22;
+  const title = o.title || 'When I Code';
+  const hours = stats.hours;
+  const max = Math.max(1, ...hours);
+  const chartTop = 70;
+  const chartH = 80;
+  const gap = 3;
+  const bw = (w - pad * 2 - gap * 23) / 24;
+  let body =
+    `<text x="${pad}" y="34" class="ti">${esc(title)}</text>` +
+    `<text x="${w - pad}" y="34" class="sub" text-anchor="end">${esc(stats.human_readable_range)}</text>` +
+    `<text x="${pad}" y="54" class="sub">${esc(stats.dayparts.persona || 'No activity yet')}</text>`;
+  hours.forEach((sec, h) => {
+    const bh = Math.max(sec > 0 ? 2 : 0, (sec / max) * chartH);
+    const x = pad + h * (bw + gap);
+    body += `<rect x="${x.toFixed(2)}" y="${(chartTop + chartH - bh).toFixed(2)}" width="${bw.toFixed(2)}" height="${bh.toFixed(2)}" rx="2" fill="var(--ac)" opacity="${h < 6 || h >= 18 ? 0.7 : 1}"/>`;
+  });
+  const axisY = chartTop + chartH + 16;
+  [
+    [0, '12am'],
+    [6, '6am'],
+    [12, '12pm'],
+    [18, '6pm'],
+  ].forEach(([h, t]) => {
+    body += `<text x="${(pad + (h as number) * (bw + gap)).toFixed(2)}" y="${axisY}" class="sm">${t}</text>`;
+  });
+  const total = hours.reduce((a, b) => a + b, 0) || 1;
+  const parts = stats.dayparts.parts;
+  const colW = (w - pad * 2) / 4;
+  parts.forEach((p, i) => {
+    const x = pad + i * colW;
+    body +=
+      `<text x="${x}" y="${axisY + 30}" class="lbl">${p.name.toUpperCase()}</text>` +
+      `<text x="${x}" y="${axisY + 50}" class="nm"><tspan style="font-weight:600;fill:var(--ti)">${Math.round((p.total_seconds / total) * 100)}%</tspan> <tspan class="val">${durationShort(p.total_seconds)}</tspan></text>`;
+  });
+  return frame(o, w, axisY + 66, body, `${title}: ${stats.dayparts.persona || ''}`);
+}
+
+/** AI agent time, share of lines, sessions, tokens and top models. */
+export function aiCard(stats: Stats, o: CardOptions): string {
+  const w = Math.min(600, Math.max(380, o.width || 460));
+  const pad = 22;
+  const title = o.title || 'AI Coding';
+  const a = stats.ai;
+  const lines = a.ai_lines + a.human_lines;
+  const colW = (w - pad * 2) / 2;
+  const tiles: [string, string, string][] = [
+    ['AGENT TIME', durationText(a.seconds), `${a.percent_of_time}% of coding time`],
+    ['LINES BY AI', lines ? `${Math.round(a.ai_percent_of_lines)}%` : '—', lines ? `${compactNum(a.ai_lines)} AI · ${compactNum(a.human_lines)} you` : ''],
+    ['SESSIONS', compactNum(a.sessions), `${compactNum(a.prompts)} prompts`],
+    ['TOKENS', compactNum(a.input_tokens + a.output_tokens), `${compactNum(a.input_tokens)} in · ${compactNum(a.output_tokens)} out`],
+  ];
+  let body =
+    `<text x="${pad}" y="34" class="ti">${esc(title)}</text>` +
+    `<text x="${w - pad}" y="34" class="sub" text-anchor="end">${esc(stats.human_readable_range)}</text>` +
+    `<rect x="${pad}" y="46" width="28" height="3" rx="1.5" fill="var(--ac)"/>`;
+  tiles.forEach(([label, value, note], i) => {
+    const x = pad + (i % 2) * colW;
+    const y = 80 + Math.floor(i / 2) * 62;
+    body +=
+      `<text x="${x}" y="${y}" class="lbl">${label}</text>` +
+      `<text x="${x}" y="${y + 24}" class="big">${esc(clip(value, 18))}</text>` +
+      (note ? `<text x="${x}" y="${y + 40}" class="sm">${esc(note)}</text>` : '');
+  });
+  let y = 80 + 2 * 62 + 4;
+  if (lines) {
+    const barW = w - pad * 2;
+    const aiW = (a.ai_lines / lines) * barW;
+    body +=
+      `<clipPath id="ai"><rect x="${pad}" y="${y}" width="${barW}" height="8" rx="4"/></clipPath><g clip-path="url(#ai)">` +
+      `<rect x="${pad}" y="${y}" width="${barW}" height="8" fill="#22c55e"/><rect x="${pad}" y="${y}" width="${aiW.toFixed(2)}" height="8" fill="var(--ac)"/></g>`;
+    y += 26;
+  }
+  const models = a.models.slice(0, 3).map((m) => `${m.name} ${durationShort(m.total_seconds)}`).join(' · ');
+  body += `<text x="${pad}" y="${y + 4}" class="sm">${esc(models ? 'Models: ' + clip(models, 70) : 'No AI agent activity in this range')}</text>`;
+  return frame(o, w, y + 24, body, `${title}: ${durationText(a.seconds)} of agent time`);
+}
+
 // ---- shields-style badge ----
 
 function textWidth(s: string): number {

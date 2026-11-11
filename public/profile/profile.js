@@ -1,10 +1,10 @@
-import { barList, dailyBars, esc, fmt, heatmap, prettyDate } from '/shared.js';
+import { barList, compact, dailyBars, esc, fmt, heatmap, hourBars, prettyDate } from '/shared.js';
 
 const $ = (s) => document.querySelector(s);
 const q = new URLSearchParams(location.search);
 const embed = q.get('embed') === '1' || q.get('embed') === 'true';
 const theme = q.get('theme');
-const ALL = ['stats', 'heatmap', 'daily', 'languages', 'editors', 'categories', 'os', 'projects'];
+const ALL = ['stats', 'heatmap', 'daily', 'hours', 'ai', 'languages', 'editors', 'categories', 'os', 'projects'];
 const sections = new Set((q.get('sections') || (embed ? 'stats,heatmap,languages,editors' : ALL.join(','))).split(',').map((s) => s.trim()));
 let range = ['last_7_days', 'last_30_days', 'last_year', 'all_time'].includes(q.get('range')) ? q.get('range') : 'last_30_days';
 
@@ -44,6 +44,18 @@ async function load() {
     $('#heat-sub').textContent = `${fmt(y.total_seconds)} total`;
     heatmap($('#heat'), y.days, y.end);
     if (st.start !== st.end) dailyBars($('#daily'), st.days, st.start, st.end);
+    hourBars($('#hours'), st.hours);
+    $('#persona').textContent = st.dayparts.persona || '';
+    const a = st.ai;
+    const lines = a.ai_lines + a.human_lines;
+    $('#ai-sub').textContent = a.seconds ? `${fmt(a.seconds)} with AI agents` : '';
+    $('#ai').innerHTML = lines || a.seconds
+      ? `<dl class="kv" style="margin-bottom:12px"><dt>Lines written by AI</dt><dd>${lines ? Math.round(a.ai_percent_of_lines) + '%' : '—'}</dd>
+         <dt>Sessions</dt><dd>${esc(compact(a.sessions))}</dd><dt>Tokens</dt><dd>${esc(compact(a.input_tokens + a.output_tokens))}</dd></dl>
+         <div class="split">${lines ? `<div style="width:${(a.ai_lines / lines) * 100}%;background:var(--accent)"></div><div style="width:${(a.human_lines / lines) * 100}%;background:#22c55e"></div>` : ''}</div>
+         <div id="ai-models" style="margin-top:14px"></div>`
+      : '<div class="empty">No AI activity in this range</div>';
+    if ($('#ai-models')) barList($('#ai-models'), a.models.map((m) => ({ name: m.name, total_seconds: m.total_seconds })), 'models', { limit: 4 });
     for (const dim of ['languages', 'editors', 'categories', 'operating_systems']) barList($('#' + dim), st[dim], dim, { limit: 6 });
     if (st.projects) barList($('#projects'), st.projects, 'projects', { limit: 6 });
     else document.querySelector('[data-s="projects"]').classList.add('hidden');

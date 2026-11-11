@@ -1,5 +1,5 @@
 import { runImport } from './import.js';
-import { LOGO, addDays, barList, copy, dailyBars, esc, fmt, heatmap, prettyDate, toast } from './shared.js';
+import { LOGO, addDays, barList, compact, copy, dailyBars, esc, fmt, heatmap, hourBars, prettyDate, toast, weekdayBars } from './shared.js';
 
 const $ = (s) => document.querySelector(s);
 const origin = location.origin;
@@ -65,10 +65,11 @@ document.querySelectorAll('.tab').forEach((t) =>
 function showTab(name) {
   document.querySelectorAll('.tab').forEach((t) => t.classList.toggle('active', t.dataset.tab === name));
   document.querySelectorAll('[data-view]').forEach((v) => v.classList.toggle('hidden', v.dataset.view !== name));
-  $('#range').classList.toggle('hidden', name !== 'overview');
+  $('#range').classList.toggle('hidden', name !== 'overview' && name !== 'ai');
   history.replaceState(null, '', name === 'overview' ? '#' : '#' + name);
   if (name === 'share') renderShare();
   if (name === 'projects') renderProjects();
+  if (name === 'ai') loadAi();
   if (name === 'timesheets') loadTimesheet();
   if (name === 'setup') {
     renderSetup();
@@ -80,7 +81,8 @@ function showTab(name) {
 // ---------- overview ----------
 $('#range').addEventListener('change', () => {
   store('waqt_range', $('#range').value);
-  loadOverview();
+  if (!$('[data-view="ai"]').classList.contains('hidden')) loadAi();
+  else loadOverview();
 });
 
 function tile(label, value, note = '') {
@@ -105,6 +107,10 @@ async function loadOverview() {
       : tile('Top language', st.languages[0]?.name || '—', st.languages[0] ? fmt(st.languages[0].total_seconds) : ''));
 
   renderGoals(year);
+  hourBars($('#hours'), st.hours);
+  weekdayBars($('#weekdays'), st.weekdays);
+  $('#persona').textContent = st.dayparts.persona || '';
+  $('#best-weekday').textContent = st.best_weekday ? `Most productive on ${st.best_weekday}` : '';
   const multiDay = st.start !== st.end;
   $('#daily-panel').classList.toggle('hidden', !multiDay);
   if (multiDay) {
@@ -128,6 +134,30 @@ async function loadOverview() {
   } else {
     $('#notice').innerHTML = '';
   }
+}
+
+// ---------- AI ----------
+async function loadAi() {
+  const { data: st } = await api(`/users/current/stats/${$('#range').value}`);
+  const a = st.ai;
+  const lines = a.ai_lines + a.human_lines;
+  $('#ai-tiles').innerHTML =
+    tile('AI agent time', fmt(a.seconds), `${a.percent_of_time}% of your coding time`) +
+    tile('Lines by AI', lines ? `${Math.round(a.ai_percent_of_lines)}%` : '—', `${compact(a.ai_lines)} AI · ${compact(a.human_lines)} you`) +
+    tile('Sessions', compact(a.sessions), `${compact(a.prompts)} prompts`) +
+    tile('Tokens', compact(a.input_tokens + a.output_tokens), `${compact(a.input_tokens)} in · ${compact(a.output_tokens)} out · ${compact(a.cached_tokens)} cached`) +
+    tile('Top model', a.models[0]?.name || '—', a.models[0] ? fmt(a.models[0].total_seconds) : '');
+  $('#ai-split').innerHTML = lines
+    ? `<div style="width:${(a.ai_lines / lines) * 100}%;background:var(--accent)"></div><div style="width:${(a.human_lines / lines) * 100}%;background:#22c55e"></div>`
+    : '';
+  $('#ai-split-text').textContent = lines ? `${a.ai_lines.toLocaleString()} by AI · ${a.human_lines.toLocaleString()} by you` : 'No line data in this range';
+  if (st.start !== st.end) dailyBars($('#ai-daily'), a.days, st.start, st.end);
+  else $('#ai-daily').innerHTML = `<div class="empty">${esc(fmt(a.seconds))} today</div>`;
+  barList(
+    $('#ai-models'),
+    a.models.map((m) => ({ name: m.name, total_seconds: m.total_seconds })),
+    'models',
+  );
 }
 
 // ---------- goals ----------
@@ -402,7 +432,7 @@ function cardUrl() {
   const p = new URLSearchParams();
   if (kind !== 'heatmap') p.set('range', range);
   if (theme !== 'auto') p.set('theme', theme);
-  if (!['stats', 'heatmap'].includes(kind)) {
+  if (!['stats', 'heatmap', 'hours', 'ai'].includes(kind)) {
     if ($('#c-layout').value === 'compact') p.set('layout', 'compact');
     if ($('#c-count').value !== '6') p.set('count', $('#c-count').value);
   }
@@ -608,7 +638,7 @@ function start() {
   const r = store('waqt_range');
   if (r && [...$('#range').options].some((o) => o.value === r)) $('#range').value = r;
   const tab = location.hash.slice(1);
-  showTab(['projects', 'timesheets', 'share', 'setup', 'settings'].includes(tab) ? tab : 'overview');
+  showTab(['ai', 'projects', 'timesheets', 'share', 'setup', 'settings'].includes(tab) ? tab : 'overview');
   loadOverview().catch((e) => {
     $('#notice').innerHTML = `<div class="banner">${esc(e.message)}</div>`;
   });

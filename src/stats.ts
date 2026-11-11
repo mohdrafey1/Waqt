@@ -84,6 +84,8 @@ const AI_SQL = `SELECT model, SUM(seconds) AS secs, SUM(sessions) AS sessions, S
   SUM(ai_lines) AS ai_lines
   FROM daily_ai WHERE day BETWEEN ?1 AND ?2 GROUP BY model`;
 
+const AI_DAYS_SQL = `SELECT day, SUM(seconds) AS secs, SUM(ai_lines) AS ai_lines FROM daily_ai WHERE day BETWEEN ?1 AND ?2 GROUP BY day ORDER BY day`;
+
 interface AiRow {
   model: string;
   secs: number;
@@ -112,10 +114,11 @@ export function dayparts(hours: number[]) {
 
 /** WakaTime-compatible stats object for a range, plus a few extras Waqt uses. */
 export async function buildStats(env: Env, s: Settings, range: Range, view: View) {
-  const [main, hourRes, aiRes] = await env.DB.batch([
+  const [main, hourRes, aiRes, aiDayRes] = await env.DB.batch([
     env.DB.prepare(STATS_SQL).bind(range.start, range.end),
     env.DB.prepare(HOURS_SQL).bind(range.start, range.end),
     env.DB.prepare(AI_SQL).bind(range.start, range.end),
+    env.DB.prepare(AI_DAYS_SQL).bind(range.start, range.end),
   ]);
   const results = main.results as unknown as StatRow[];
   const tz = tzOf(s);
@@ -210,6 +213,7 @@ export async function buildStats(env: Env, s: Settings, range: Range, view: View
         input_tokens: r.input_tokens,
         output_tokens: r.output_tokens,
       })),
+    days: (aiDayRes.results as unknown as { day: string; secs: number }[]).map((r) => ({ date: r.day, total_seconds: Math.round(r.secs) })),
   };
 
   const avg = activeDays ? total / activeDays : 0;

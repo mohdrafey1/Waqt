@@ -30,6 +30,7 @@
         <a class="logo" href="/" id="app-logo"></a>
         <nav class="tabs">
           <button class="tab active" data-tab="overview">Overview</button>
+          <button class="tab" data-tab="ai">AI</button>
           <button class="tab" data-tab="projects">Projects</button>
           <button class="tab" data-tab="timesheets">Timesheets</button>
           <button class="tab" data-tab="share">Share</button>
@@ -61,6 +62,10 @@
           <div class="panel-head"><h2>Coding time</h2><span class="muted" id="daily-sub"></span></div>
           <div id="daily"></div>
         </div>
+        <div class="grid two section">
+          <div class="panel"><div class="panel-head"><h2>Time of day</h2><span class="muted" id="persona"></span></div><div id="hours"></div></div>
+          <div class="panel"><div class="panel-head"><h2>Days of the week</h2><span class="muted" id="best-weekday"></span></div><div id="weekdays"></div></div>
+        </div>
         <div class="panel section">
           <div class="panel-head"><h2>Last year</h2><span class="muted" id="heat-sub"></span></div>
           <div id="heat"></div>
@@ -74,6 +79,21 @@
           <div class="panel"><div class="panel-head"><h2>Machines</h2></div><div id="machines"></div></div>
           <div class="panel hidden" id="labels-panel"><div class="panel-head"><h2>Labels</h2></div><div id="labels"></div></div>
         </div>
+      </section>
+
+      <!-- AI -->
+      <section data-view="ai" class="hidden">
+        <div class="grid tiles" id="ai-tiles"></div>
+        <div class="panel section">
+          <div class="panel-head"><h2>Lines changed</h2><span class="muted" id="ai-split-text"></span></div>
+          <div class="split" id="ai-split"></div>
+          <div class="legend" style="justify-content:flex-start;gap:16px;margin-top:10px"><span><i style="background:var(--accent)"></i> AI</span><span><i style="background:#22c55e"></i> You</span></div>
+        </div>
+        <div class="grid two section">
+          <div class="panel"><div class="panel-head"><h2>AI agent time per day</h2></div><div id="ai-daily"></div></div>
+          <div class="panel"><div class="panel-head"><h2>Models</h2></div><div id="ai-models"></div></div>
+        </div>
+        <p class="faint" style="font-size:12.5px">AI data comes from editor plugins that report it (for example Claude Code, Cursor, Copilot and Codex through the WakaTime CLI). Uses the range picked at the top.</p>
       </section>
 
       <!-- Projects -->
@@ -151,6 +171,8 @@
                   <option value="categories">Activity types</option>
                   <option value="os">Operating systems</option>
                   <option value="projects">Projects</option>
+                  <option value="hours">Time of day</option>
+                  <option value="ai">AI coding</option>
                   <option value="badge">Badge</option>
                 </select>
               </label>
@@ -192,7 +214,7 @@
               <div class="code" id="p-link"></div>
               <h3 style="font-size:13px;margin:16px 0 8px">Embed on your website</h3>
               <div class="code" id="p-iframe"></div>
-              <p class="faint" style="font-size:12.5px">Options: <code>range</code> (last_7_days, last_30_days, last_year, all_time), <code>theme</code> (auto, dark, light), <code>sections</code> (stats, heatmap, daily, languages, editors, categories, os, projects).</p>
+              <p class="faint" style="font-size:12.5px">Options: <code>range</code> (last_7_days, last_30_days, last_year, all_time), <code>theme</code> (auto, dark, light), <code>sections</code> (stats, heatmap, daily, hours, ai, languages, editors, categories, os, projects).</p>
             </div>
             <div class="panel section">
               <div class="panel-head"><h2>Works with existing tools</h2></div>

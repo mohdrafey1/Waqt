@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { badge, cardOptions, heatmapCard, messageCard, statsCard, topCard } from '../cards';
+import { aiCard, badge, cardOptions, heatmapCard, hoursCard, messageCard, statsCard, topCard } from '../cards';
 import { type C, type AppEnv, cors, withSettings } from '../http';
 import { getStats, streaks } from '../stats';
 import { RANGES, durationText } from '../time';
@@ -44,6 +44,9 @@ cards.get('/:kind', async (c) => {
   const st = await getStats(c.env, s, { range, view: 'public' });
   if (!st) return svg(c, messageCard(`Unknown range "${range}".`, o), 300);
 
+  if (kind === 'hours') return svg(c, hoursCard(st, o), cacheSeconds(c));
+  if (kind === 'ai') return svg(c, aiCard(st, o), cacheSeconds(c));
+
   if (kind === 'stats') {
     let streak = st.streak;
     if (st.range !== 'last_year' && st.range !== 'all_time') {
@@ -54,7 +57,7 @@ cards.get('/:kind', async (c) => {
   }
 
   const dim = TOP_DIMS[kind];
-  if (!dim) return svg(c, messageCard('Unknown card. Try languages, editors, os, categories, projects, stats or heatmap.', o), 300);
+  if (!dim) return svg(c, messageCard('Unknown card. Try languages, editors, os, categories, projects, stats, heatmap, hours or ai.', o), 300);
   if (dim === 'projects' && !s.public_projects) {
     return svg(c, messageCard('Project names are private (turn on in Settings).', o), 300);
   }
