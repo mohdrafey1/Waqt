@@ -240,3 +240,7 @@ input[type='date'] { background: var(--panel-2); color: var(--text); border: 1px
 .meter .track div { height: 100%; background: var(--ok); border-radius: 5px; }
 .meter .track div.warn { background: var(--warn); }
 .meter .track div.bad { background: var(--danger); }
+
+.linkish { background: none; border: 0; padding: 0; color: inherit; font: inherit; cursor: pointer; text-align: left; }
+.linkish:hover { color: var(--accent); text-decoration: underline; }
+.file-list .bar-row .name span { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; }

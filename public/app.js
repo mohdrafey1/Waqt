@@ -209,7 +209,7 @@ function drawProjects() {
         .map((p) => {
           const shown = aliases[p.name] || p.name;
           return `<tr data-name="${esc(p.name)}">
-            <td>${p.name ? esc(p.name) : '<span class="faint">Unknown Project</span>'}</td>
+            <td><button type="button" class="linkish p-open" data-shown="${esc(shown)}">${p.name ? esc(p.name) : '<span class="faint">Unknown Project</span>'}</button>${shown !== p.name && p.name ? ` <span class="faint">→ ${esc(shown)}</span>` : ''}</td>
             <td class="num">${esc(p.text)}</td>
             <td><input type="text" class="p-alias" value="${esc(aliases[p.name] || '')}" placeholder="${esc(p.name)}" ${p.name ? '' : 'disabled'}></td>
             <td><input type="text" class="p-label" list="label-options" value="${esc(labels[shown] || '')}" placeholder="e.g. Client A" ${p.name ? '' : 'disabled'}></td>
@@ -218,8 +218,54 @@ function drawProjects() {
         })
         .join('')
     : '<tr><td colspan="5" class="empty">No projects yet</td></tr>';
+  document.querySelectorAll('.p-open').forEach((b) => (b.onclick = () => openProject(b.dataset.shown)));
 }
 $('#proj-filter').addEventListener('input', drawProjects);
+
+// ---------- one project in detail ----------
+let openedProject = null;
+async function openProject(name) {
+  openedProject = name;
+  $('#proj-detail').classList.remove('hidden');
+  $('#proj-list').classList.add('hidden');
+  $('#pd-name').textContent = name || 'Unknown Project';
+  $('#pd-label').textContent = '';
+  $('#pd-tiles').innerHTML = '';
+  ['#pd-daily', '#pd-branches', '#pd-languages', '#pd-editors', '#pd-files'].forEach((id) => ($(id).innerHTML = '<div class="empty">Loading…</div>'));
+  window.scrollTo({ top: 0 });
+  try {
+    const { data: p } = await api(`/users/current/project?name=${encodeURIComponent(name)}&days=${$('#pd-days').value}`);
+    if (openedProject !== name) return;
+    const others = p.names.filter((n) => n !== p.name);
+    $('#pd-label').textContent = [p.label, others.length ? `includes ${others.join(', ')}` : ''].filter(Boolean).join(' · ');
+    const top = (list) => (list[0] ? list[0].name : '—');
+    $('#pd-tiles').innerHTML =
+      tile('Time', p.text, p.active_days ? `${p.active_days} active day${p.active_days === 1 ? '' : 's'}` : 'no activity') +
+      tile('Daily average', p.active_days ? fmt(p.total_seconds / p.active_days) : '—', 'on active days') +
+      tile('Top branch', top(p.branches), p.branches[0] ? p.branches[0].text : '') +
+      tile('Top language', top(p.languages), p.languages[0] ? p.languages[0].text : '') +
+      tile('Last active', p.last_day ? prettyDate(p.last_day, { month: 'short', day: 'numeric', year: 'numeric' }) : '—', p.first_day ? `since ${prettyDate(p.first_day, { month: 'short', day: 'numeric', year: 'numeric' })}` : '');
+    $('#pd-range').textContent = `${prettyDate(p.start)} – ${prettyDate(p.end)}`;
+    dailyBars($('#pd-daily'), p.days, p.start, p.end);
+    barList($('#pd-branches'), p.branches, 'branches');
+    barList($('#pd-languages'), p.languages, 'languages');
+    barList($('#pd-editors'), p.editors, 'editors');
+    $('#pd-files').classList.add('file-list');
+    barList($('#pd-files'), p.files, 'files', { limit: 15 });
+    if (!p.branches.length && p.total_seconds) {
+      $('#pd-branches').innerHTML = '<div class="empty">No file details for this range yet. They are rebuilt from raw heartbeats in the background, and imported history gets them when you import again.</div>';
+    }
+  } catch (e) {
+    $('#pd-files').innerHTML = `<div class="err">${esc(e.message)}</div>`;
+  }
+}
+function closeProject() {
+  openedProject = null;
+  $('#proj-detail').classList.add('hidden');
+  $('#proj-list').classList.remove('hidden');
+}
+$('#pd-close').onclick = closeProject;
+$('#pd-days').onchange = () => openedProject !== null && openProject(openedProject);
 $('#proj-save').onclick = async () => {
   $('#proj-err').textContent = '';
   const aliases = { ...(settings.project_aliases || {}) };

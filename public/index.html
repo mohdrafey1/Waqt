@@ -98,9 +98,34 @@
 
       <!-- Projects -->
       <section data-view="projects" class="hidden">
-        <div class="panel" style="margin-top:22px">
+        <div id="proj-detail" class="hidden">
+          <div class="row" style="margin-top:22px;align-items:center">
+            <h2 id="pd-name" style="margin:0;font-size:20px"></h2><span class="muted" id="pd-label"></span>
+            <div class="spacer"></div>
+            <select id="pd-days" aria-label="Project range">
+              <option value="7">Last 7 days</option>
+              <option value="30" selected>Last 30 days</option>
+              <option value="90">Last 90 days</option>
+              <option value="365">Last year</option>
+              <option value="0">All time</option>
+            </select>
+            <button class="btn small" id="pd-close" type="button">Back to all projects</button>
+          </div>
+          <div class="grid tiles" id="pd-tiles"></div>
+          <div class="panel section"><div class="panel-head"><h2>Time per day</h2><span class="muted" id="pd-range"></span></div><div id="pd-daily"></div></div>
+          <div class="grid three section">
+            <div class="panel"><div class="panel-head"><h2>Branches</h2></div><div id="pd-branches"></div></div>
+            <div class="panel"><div class="panel-head"><h2>Languages</h2></div><div id="pd-languages"></div></div>
+            <div class="panel"><div class="panel-head"><h2>Editors</h2></div><div id="pd-editors"></div></div>
+          </div>
+          <div class="panel section">
+            <div class="panel-head"><h2>Files</h2><span class="muted">Paths relative to the project folder · the 40 busiest files per day are kept</span></div>
+            <div id="pd-files"></div>
+          </div>
+        </div>
+        <div class="panel" style="margin-top:22px" id="proj-list">
           <div class="panel-head"><h2>Tidy up your projects</h2><span class="muted" id="proj-count"></span></div>
-          <p class="muted" style="margin-top:0"><b>Show as</b> renames a project, and giving several projects the same name merges them (e.g. <code>deku-task-kit-gfkit</code> → <code>deku-task-kit</code>). <b>Label</b> groups projects, for example by client, for the Overview and Timesheets. <b>Hide</b> keeps a project out of your public profile and cards.</p>
+          <p class="muted" style="margin-top:0">Click a project to see its files, branches and languages. <b>Show as</b> renames a project, and giving several projects the same name merges them (e.g. <code>deku-task-kit-gfkit</code> → <code>deku-task-kit</code>). <b>Label</b> groups projects, for example by client, for the Overview and Timesheets. <b>Hide</b> keeps a project out of your public profile and cards.</p>
           <input type="text" id="proj-filter" placeholder="Filter projects…" style="max-width:320px;margin-bottom:12px">
           <div style="overflow-x:auto">
             <table class="table" id="proj-table">

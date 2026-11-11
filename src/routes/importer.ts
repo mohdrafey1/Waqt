@@ -140,7 +140,14 @@ importer.get('/wakatime/lookups', async (c) => {
 });
 
 type Row = [string, string, string, string, string, string, number, number, number];
-type ImportDay = { day: string; rows: Row[]; hours: [number, number][]; ai: [string, number, number, number, number, number, number, number][] };
+type FileRow = [string, string, string, number];
+type ImportDay = {
+  day: string;
+  rows: Row[];
+  hours: [number, number][];
+  ai: [string, number, number, number, number, number, number, number][];
+  files?: FileRow[];
+};
 
 const str = (v: unknown, n = 200) => (typeof v === 'string' ? v.slice(0, n) : '');
 const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : 0);
@@ -160,7 +167,7 @@ importer.post('/days', async (c) => {
 
   const since = await ownSince(c, s);
   const lastAllowed = since ? dayOf(since, tzOf(s)) : null;
-  const clean: { day: string; sum: { rows: Row[]; hours: [number, number][]; ai: ImportDay['ai'] } }[] = [];
+  const clean: { day: string; sum: { rows: Row[]; hours: [number, number][]; ai: ImportDay['ai']; files: FileRow[] } }[] = [];
   for (const d of days) {
     if (!isDay(d.day) || (lastAllowed && d.day > lastAllowed)) continue; // never import over Waqt's own days
     clean.push({
@@ -169,6 +176,7 @@ importer.post('/days', async (c) => {
         rows: (d.rows || []).slice(0, 2000).map((r) => [str(r[0]), str(r[1], 60), str(r[2], 60), str(r[3], 40), str(r[4], 100), str(r[5], 40).toLowerCase(), num(r[6]), num(r[7]), num(r[8])] as Row),
         hours: (d.hours || []).filter((h) => Number.isInteger(h[0]) && h[0] >= 0 && h[0] < 24).map((h) => [h[0], num(h[1])] as [number, number]),
         ai: (d.ai || []).slice(0, 50).map((a) => [str(a[0], 60), num(a[1]), num(a[2]), num(a[3]), num(a[4]), num(a[5]), num(a[6]), num(a[7])] as ImportDay['ai'][number]),
+        files: (Array.isArray(d.files) ? d.files : []).slice(0, 3000).map((f) => [str(f[0]), str(f[1], 200), str(f[2], 300), num(f[3])] as FileRow),
       },
     });
   }
@@ -188,6 +196,7 @@ importer.delete('/', async (c) => {
     c.env.DB.prepare("DELETE FROM daily_summaries WHERE source = 'import'"),
     c.env.DB.prepare("DELETE FROM daily_hours WHERE source = 'import'"),
     c.env.DB.prepare("DELETE FROM daily_ai WHERE source = 'import'"),
+    c.env.DB.prepare("DELETE FROM daily_files WHERE source = 'import'"),
   ]);
   await clearCache(c.env);
   return c.json({ data: { ok: true } });

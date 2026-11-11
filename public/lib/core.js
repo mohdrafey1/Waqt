@@ -18,6 +18,9 @@
  * @property {number|null} [ai_prompt_length]
  * @property {number|null} [ai_line_changes]
  * @property {number|null} [human_line_changes]
+ * @property {string} [entity]   file path, domain or app
+ * @property {string} [type]     'file' | 'domain' | 'url' | 'app'
+ * @property {string} [branch]
  */
 
 /**
@@ -27,6 +30,7 @@
  * @property {Array<[number, number]>} hours  [hour 0-23, seconds]
  * @property {Array<[string,number,number,number,number,number,number,number]>} ai
  *   [model, seconds, sessions, prompts, input_tokens, output_tokens, cached_tokens, ai_lines]
+ * @property {Array<[string,string,string,number]>} files  [project, branch, entity, seconds]
  */
 
 const round3 = (n) => Math.round(n * 1000) / 1000;
@@ -87,6 +91,26 @@ export function addDays(day, n) {
   return new Date(Date.UTC(y, m - 1, d + n)).toISOString().slice(0, 10);
 }
 
+/** Files kept per project per day; the rest are added up as one "other files" row (entity ""). */
+export const FILES_PER_PROJECT = 40;
+
+/**
+ * A file path relative to its project folder ("src/index.ts"), so stored paths are
+ * short and don't reveal where things live on disk. Domains and apps stay as they are.
+ * @returns {string}
+ */
+export function relativeEntity(entity, type, project) {
+  if (!entity) return '';
+  if (type && type !== 'file') return entity.slice(0, 300);
+  const path = entity.replace(/\\/g, '/');
+  if (project) {
+    const i = path.indexOf('/' + project + '/');
+    if (i >= 0) return path.slice(i + project.length + 2).slice(-300);
+  }
+  // Unknown project root: keep the last three parts of the path.
+  return path.split('/').filter(Boolean).slice(-3).join('/').slice(-300);
+}
+
 /**
  * Turn one day's heartbeats (sorted by time) into totals. Each heartbeat is credited
  * with the gap until the next one if that gap is within `timeout` seconds, the way
@@ -104,6 +128,8 @@ export function summarizeDay(beats, start, end, timeout) {
   const hours = new Array(24).fill(0);
   /** @type {Map<string, {seconds:number, sessions:Set<string>, prompts:number, inTok:number, outTok:number, cached:number, lines:number}>} */
   const ai = new Map();
+  /** @type {Map<string, [string,string,string,number]>} */
+  const files = new Map();
 
   for (let i = 0; i < beats.length; i++) {
     const h = beats[i];
@@ -122,6 +148,17 @@ export function summarizeDay(beats, start, end, timeout) {
     row[6] += credit;
     row[7] += h.ai_line_changes || 0;
     row[8] += h.human_line_changes || 0;
+
+    if (credit > 0 && h.entity !== undefined) {
+      const entity = relativeEntity(h.entity || '', h.type, h.project);
+      const fkey = `${h.project}\u0000${h.branch || ''}\u0000${entity}`;
+      let f = files.get(fkey);
+      if (!f) {
+        f = [h.project, h.branch || '', entity, 0];
+        files.set(fkey, f);
+      }
+      f[3] += credit;
+    }
 
     // Spread the credited time over the local hours it covers.
     let t = h.time;
@@ -181,7 +218,33 @@ export function summarizeDay(beats, start, end, timeout) {
         a.lines,
       ]))
       .filter((r) => r.slice(1).some((v) => v)),
+    files: topFiles([...files.values()]),
   };
+}
+
+/** Keep the busiest files of each project; add up the rest per project and branch. */
+function topFiles(list) {
+  list.sort((a, b) => b[3] - a[3]);
+  /** @type {Map<string, number>} */
+  const kept = new Map();
+  /** @type {Map<string, [string,string,string,number]>} */
+  const other = new Map();
+  /** @type {Array<[string,string,string,number]>} */
+  const out = [];
+  for (const f of list) {
+    const n = kept.get(f[0]) || 0;
+    if (n < FILES_PER_PROJECT && f[2]) {
+      kept.set(f[0], n + 1);
+      out.push([f[0], f[1], f[2], round3(f[3])]);
+    } else {
+      const k = `${f[0]}\u0000${f[1]}`;
+      const o = other.get(k) || [f[0], f[1], '', 0];
+      o[3] += f[3];
+      other.set(k, o);
+    }
+  }
+  for (const o of other.values()) out.push([o[0], o[1], '', round3(o[3])]);
+  return out.filter((f) => f[3] > 0);
 }
 
 /** Turn an AI user-agent token like "opus/4.1-medium" into a friendly name. */

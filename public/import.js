@@ -40,6 +40,9 @@ function toBeat(h, lookups) {
     ai_prompt_length: int(h.ai_prompt_length),
     ai_line_changes: int(h.ai_line_changes),
     human_line_changes: int(h.human_line_changes),
+    entity: h.entity || '',
+    type: h.type || 'file',
+    branch: h.branch || '',
   };
 }
 

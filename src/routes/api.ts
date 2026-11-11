@@ -342,6 +342,61 @@ api.get('/users/current/projects', requireAuth, async (c) => {
   });
 });
 
+// One project in detail: daily time, languages, branches and files.
+api.get('/users/current/project', requireAuth, async (c) => {
+  const s = c.get('settings');
+  const name = c.req.query('name');
+  if (name === undefined) return c.json({ error: 'name is required' }, 400);
+  const days = Math.min(36500, Math.max(0, Math.trunc(Number(c.req.query('days') ?? 30)) || 0));
+  const today = todayIn(tzOf(s));
+  const start = days ? addDays(today, -(days - 1)) : '0000-01-01';
+  // Every stored name that is shown as this one (renames and merges).
+  const raw = new Set<string>();
+  if (aliasOf(s, name) === name) raw.add(name);
+  for (const [from, to] of Object.entries(s.project_aliases)) if (to === name) raw.add(from);
+  if (!raw.size) raw.add(name);
+  const names = JSON.stringify([...raw]);
+  await flushDirty(c.env, s, 2);
+
+  const q = (sql: string) => c.env.DB.prepare(sql).bind(names, start, today);
+  const inProject = 'project IN (SELECT value FROM json_each(?1)) AND day BETWEEN ?2 AND ?3';
+  const [daily, langs, editors, branches, files] = await c.env.DB.batch([
+    q(`SELECT day, SUM(seconds) AS secs FROM daily_summaries WHERE ${inProject} GROUP BY day ORDER BY day`),
+    q(`SELECT language AS name, SUM(seconds) AS secs FROM daily_summaries WHERE ${inProject} GROUP BY language ORDER BY secs DESC LIMIT 50`),
+    q(`SELECT editor AS name, SUM(seconds) AS secs FROM daily_summaries WHERE ${inProject} GROUP BY editor ORDER BY secs DESC LIMIT 20`),
+    q(`SELECT branch AS name, SUM(seconds) AS secs, MAX(day) AS last_day FROM daily_files WHERE ${inProject} GROUP BY branch ORDER BY secs DESC LIMIT 100`),
+    q(`SELECT entity AS name, SUM(seconds) AS secs, MAX(day) AS last_day FROM daily_files WHERE ${inProject} GROUP BY entity ORDER BY secs DESC LIMIT 200`),
+  ]);
+  type R = { name: string; secs: number; last_day?: string };
+  const item = (r: R, fallback: string) => ({
+    name: r.name && r.name !== '<<LAST_LANGUAGE>>' ? r.name : fallback,
+    total_seconds: Math.round(r.secs),
+    text: durationText(r.secs),
+    ...(r.last_day ? { last_day: r.last_day } : {}),
+  });
+  const dayRows = daily.results as { day: string; secs: number }[];
+  const total = dayRows.reduce((a, r) => a + r.secs, 0);
+  return c.json({
+    data: {
+      name,
+      names: [...raw],
+      label: s.project_labels[name] || '',
+      start: days ? start : dayRows[0]?.day || today,
+      end: today,
+      total_seconds: Math.round(total),
+      text: durationText(total),
+      active_days: dayRows.filter((r) => r.secs >= 60).length,
+      first_day: dayRows[0]?.day || null,
+      last_day: dayRows[dayRows.length - 1]?.day || null,
+      days: dayRows.map((r) => ({ date: r.day, total_seconds: Math.round(r.secs) })),
+      languages: (langs.results as R[]).map((r) => item(r, 'Other')).filter((r) => r.total_seconds > 0),
+      editors: (editors.results as R[]).map((r) => item(r, 'Unknown')).filter((r) => r.total_seconds > 0),
+      branches: (branches.results as R[]).map((r) => item(r, 'No branch')).filter((r) => r.total_seconds > 0),
+      files: (files.results as R[]).map((r) => item(r, 'Other files')).filter((r) => r.total_seconds > 0),
+    },
+  });
+});
+
 api.put('/users/current/settings', requireAuth, async (c) => {
   const s = c.get('settings');
   let body: Record<string, unknown>;

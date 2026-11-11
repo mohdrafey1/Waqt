@@ -19,6 +19,7 @@ function hash(s) {
 }
 export function colorFor(dim, name, i) {
   if (dim === 'languages') return LANGUAGE_COLORS[name.toLowerCase()] || PALETTE[hash(name) % PALETTE.length];
+  if (dim === 'files') return PALETTE[0];
   return PALETTE[i % PALETTE.length];
 }
 

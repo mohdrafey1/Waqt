@@ -21,7 +21,7 @@ export async function recomputeDay(env: Env, s: Settings, day: string, markedAt:
   const { results } = await env.DB.prepare(
     `SELECT time, project, language, editor, os, machine, category, ai_model, ai_session,
             ai_input_tokens, ai_output_tokens, ai_cached_tokens, ai_prompt_length,
-            ai_line_changes, human_line_changes
+            ai_line_changes, human_line_changes, entity, type, branch
      FROM heartbeats WHERE time >= ?1 AND time < ?2 ORDER BY time`,
   )
     .bind(start, end + timeout)
@@ -41,6 +41,7 @@ export function replaceDayStatements(db: D1Database, day: string, source: string
     db.prepare('DELETE FROM daily_summaries WHERE day = ?1 AND source = ?2').bind(day, source),
     db.prepare('DELETE FROM daily_hours WHERE day = ?1 AND source = ?2').bind(day, source),
     db.prepare('DELETE FROM daily_ai WHERE day = ?1 AND source = ?2').bind(day, source),
+    db.prepare('DELETE FROM daily_files WHERE day = ?1 AND source = ?2').bind(day, source),
     db.prepare(
       `INSERT INTO daily_summaries (day, source, project, language, editor, os, machine, category, seconds, ai_lines, human_lines)
        SELECT ?1, ?2, json_extract(value, '$[0]'), json_extract(value, '$[1]'), json_extract(value, '$[2]'),
@@ -59,13 +60,18 @@ export function replaceDayStatements(db: D1Database, day: string, source: string
               json_extract(value, '$[6]'), json_extract(value, '$[7]')
        FROM json_each(?3)`,
     ).bind(day, source, JSON.stringify(sum.ai)),
+    db.prepare(
+      `INSERT INTO daily_files (day, source, project, branch, entity, seconds)
+       SELECT ?1, ?2, json_extract(value, '$[0]'), json_extract(value, '$[1]'), json_extract(value, '$[2]'), json_extract(value, '$[3]')
+       FROM json_each(?3)`,
+    ).bind(day, source, JSON.stringify(sum.files || [])),
   ];
 }
 
-type DayRows = { day: string; sum: DaySummary };
+type DayRows = { day: string; sum: Omit<DaySummary, 'files'> & { files?: DaySummary['files'] } };
 
 /**
- * Replace many days of one source in 6 statements (instead of 6 per day),
+ * Replace many days of one source in 8 statements (instead of 8 per day),
  * which keeps imports well inside D1's per-request query limit.
  */
 export function replaceDaysStatements(db: D1Database, source: string, days: DayRows[]): D1PreparedStatement[] {
@@ -73,11 +79,13 @@ export function replaceDaysStatements(db: D1Database, source: string, days: DayR
   const rows = days.flatMap((d) => d.sum.rows.map((r) => [d.day, ...r]));
   const hours = days.flatMap((d) => d.sum.hours.map((h) => [d.day, ...h]));
   const ai = days.flatMap((d) => d.sum.ai.map((a) => [d.day, ...a]));
+  const files = days.flatMap((d) => (d.sum.files || []).map((f) => [d.day, ...f]));
   const j = (i: number) => `json_extract(value, '$[${i}]')`;
   return [
     db.prepare('DELETE FROM daily_summaries WHERE source = ?1 AND day IN (SELECT value FROM json_each(?2))').bind(source, list),
     db.prepare('DELETE FROM daily_hours WHERE source = ?1 AND day IN (SELECT value FROM json_each(?2))').bind(source, list),
     db.prepare('DELETE FROM daily_ai WHERE source = ?1 AND day IN (SELECT value FROM json_each(?2))').bind(source, list),
+    db.prepare('DELETE FROM daily_files WHERE source = ?1 AND day IN (SELECT value FROM json_each(?2))').bind(source, list),
     db.prepare(
       `INSERT INTO daily_summaries (day, source, project, language, editor, os, machine, category, seconds, ai_lines, human_lines)
        SELECT ${j(0)}, ?1, ${[1, 2, 3, 4, 5, 6, 7, 8, 9].map(j).join(', ')} FROM json_each(?2)`,
@@ -90,6 +98,9 @@ export function replaceDaysStatements(db: D1Database, source: string, days: DayR
       `INSERT INTO daily_ai (day, source, model, seconds, sessions, prompts, input_tokens, output_tokens, cached_tokens, ai_lines)
        SELECT ${j(0)}, ?1, ${[1, 2, 3, 4, 5, 6, 7, 8].map(j).join(', ')} FROM json_each(?2)`,
     ).bind(source, JSON.stringify(ai)),
+    db.prepare(
+      `INSERT INTO daily_files (day, source, project, branch, entity, seconds) SELECT ${j(0)}, ?1, ${[1, 2, 3, 4].map(j).join(', ')} FROM json_each(?2)`,
+    ).bind(source, JSON.stringify(files)),
   ];
 }
 
