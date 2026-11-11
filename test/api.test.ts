@@ -168,3 +168,16 @@ describe('cron', () => {
     expect(s.stats.pending_days).toBe(0);
   });
 });
+
+describe('Waqt Wrapped', () => {
+  it('draws the year card and the page is served', async () => {
+    const year = new Date().getUTCFullYear();
+    const res = await call(`/card/wrapped.svg?year=${year}&theme=dark`);
+    expect(res.status).toBe(200);
+    const svg = await res.text();
+    expect(svg).toContain(`${year} in code`);
+    expect(svg).toContain('LONGEST STREAK');
+    const future = await (await call(`/card/wrapped.svg?year=${year + 1}`)).text();
+    expect(future).toContain('Nothing to show');
+  });
+});

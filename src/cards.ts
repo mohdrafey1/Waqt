@@ -3,7 +3,7 @@
 
 import { PALETTE, colorFor, isHex, mix } from './colors';
 import { usd } from './readme';
-import { DayTotal, Stats } from './stats';
+import { DayTotal, Stats, streaks } from './stats';
 import { addDays, durationShort, durationText, weekday } from './time';
 
 const FONT = `-apple-system,BlinkMacSystemFont,'Segoe UI','Noto Sans',Helvetica,Arial,sans-serif`;
@@ -347,6 +347,66 @@ export function aiCard(stats: Stats, o: CardOptions): string {
   const models = a.models.slice(0, 3).map((m) => `${m.name} ${durationShort(m.total_seconds)}`).join(' · ');
   body += `<text x="${pad}" y="${y + 4}" class="sm">${esc(models ? 'Models: ' + clip(models, 70) : 'No AI agent activity in this range')}</text>`;
   return frame(o, w, y + 24, body, `${title}: ${durationText(a.seconds)} of agent time`);
+}
+
+// ---- year in review ----
+
+const MONTHS = ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'];
+
+/** "Waqt Wrapped": one year on one card, for READMEs and sharing. */
+export function wrappedCard(stats: Stats, year: number, o: CardOptions): string {
+  const w = Math.min(900, Math.max(480, o.width || 600));
+  const pad = 26;
+  const name = stats.display_name && stats.display_name !== stats.username ? `${stats.display_name}'s` : 'My';
+  const title = o.title || `${name} ${year} in code`;
+  const hours = Math.round(stats.total_seconds / 3600);
+  const longest = streaks(stats.days, stats.end).longest;
+  const months = new Array(12).fill(0);
+  for (const d of stats.days) months[Number(d.date.slice(5, 7)) - 1] += d.total_seconds;
+  const maxMonth = Math.max(1, ...months);
+  const ai = stats.ai.ai_lines + stats.ai.human_lines ? `${Math.round(stats.ai.ai_percent_of_lines)}%` : '';
+
+  // Month bars on the right
+  const chartW = Math.min(250, w * 0.42);
+  const chartX = w - pad - chartW;
+  const barGap = 4;
+  const barW = (chartW - barGap * 11) / 12;
+  const chartTop = 82;
+  const chartH = 92;
+  let bars = '';
+  months.forEach((secs, i) => {
+    const h = Math.max(secs ? 3 : 2, (secs / maxMonth) * chartH);
+    const x = chartX + i * (barW + barGap);
+    bars +=
+      `<rect x="${x.toFixed(1)}" y="${(chartTop + chartH - h).toFixed(1)}" width="${barW.toFixed(1)}" height="${h.toFixed(1)}" rx="2" fill="${secs ? 'var(--ac)' : 'var(--tr)'}"/>` +
+      `<text x="${(x + barW / 2).toFixed(1)}" y="${chartTop + chartH + 14}" class="sm" text-anchor="middle">${MONTHS[i]}</text>`;
+  });
+
+  const tiles: [string, string][] = [
+    ['LONGEST STREAK', `${longest} day${longest === 1 ? '' : 's'}`],
+    ['TOP LANGUAGE', stats.languages?.[0]?.name || '—'],
+    ['TOP EDITOR', stats.editors?.[0]?.name || '—'],
+    ai ? ['LINES BY AI', ai] : ['BEST DAY', stats.best_day ? durationShort(stats.best_day.total_seconds) : '—'],
+  ];
+  const tileW = (w - pad * 2) / 4;
+  const tileY = 232;
+  let tileSvg = `<line x1="${pad}" y1="${tileY - 26}" x2="${w - pad}" y2="${tileY - 26}" stroke="var(--tr)"/>`;
+  tiles.forEach(([label, value], i) => {
+    const x = pad + i * tileW;
+    tileSvg += `<text x="${x}" y="${tileY}" class="lbl">${label}</text><text x="${x}" y="${tileY + 24}" class="big">${esc(clip(value, Math.floor(tileW / 11)))}</text>`;
+  });
+
+  const persona = stats.dayparts?.persona ? `${stats.dayparts.persona} · ` : '';
+  const body =
+    `<text x="${pad}" y="38" class="ti" style="font-size:17px">${esc(clip(title, 46))}</text>` +
+    `<text x="${w - pad}" y="38" class="sub" text-anchor="end">Waqt Wrapped</text>` +
+    `<rect x="${pad}" y="50" width="32" height="3" rx="1.5" fill="var(--ac)"/>` +
+    `<text x="${pad}" y="132" style="font-size:52px;font-weight:700;fill:var(--ti);letter-spacing:-0.03em">${hours.toLocaleString('en-US')}<tspan style="font-size:22px;font-weight:600;fill:var(--mu)" dx="8">hrs</tspan></text>` +
+    `<text x="${pad}" y="160" class="nm">of coding on ${stats.days_minus_holidays} day${stats.days_minus_holidays === 1 ? '' : 's'}</text>` +
+    `<text x="${pad}" y="180" class="val">${esc(persona)}busiest on ${esc(stats.best_weekday || '—')}s</text>` +
+    bars +
+    tileSvg;
+  return frame(o, w, tileY + 46, body, `${title}: ${hours} hours`);
 }
 
 // ---- shields-style badge ----

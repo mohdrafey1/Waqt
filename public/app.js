@@ -624,9 +624,10 @@ function cardUrl() {
   const theme = $('#c-theme').value;
   if (kind === 'badge') return `${origin}/badge/${range}.svg`;
   const p = new URLSearchParams();
-  if (kind !== 'heatmap') p.set('range', range);
+  if (kind === 'wrapped') p.set('year', localToday().slice(0, 4));
+  else if (kind !== 'heatmap') p.set('range', range);
   if (theme !== 'auto') p.set('theme', theme);
-  if (!['stats', 'heatmap', 'hours', 'ai'].includes(kind)) {
+  if (!['stats', 'heatmap', 'hours', 'ai', 'wrapped'].includes(kind)) {
     if ($('#c-layout').value === 'compact') p.set('layout', 'compact');
     if ($('#c-count').value !== '6') p.set('count', $('#c-count').value);
   }

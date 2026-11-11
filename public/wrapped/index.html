@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Waqt Wrapped</title>
+  <meta name="description" content="A year of coding, wrapped up.">
+  <meta property="og:title" content="Waqt Wrapped">
+  <meta property="og:description" content="A year of coding, wrapped up.">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/style.css">
+  <style>
+    html, body { height: 100%; }
+    body { overflow: hidden; background: #0b0b10; color: #ecebf5; color-scheme: dark; }
+    .stage { position: fixed; inset: 0; display: grid; place-items: center; padding: 64px 20px 40px; }
+    .progress { position: fixed; top: 14px; left: 16px; right: 16px; display: flex; gap: 5px; z-index: 3; }
+    .progress i { flex: 1; height: 3px; border-radius: 2px; background: rgba(255, 255, 255, .18); overflow: hidden; }
+    .progress i.done { background: rgba(255, 255, 255, .85); }
+    .brand { position: fixed; top: 28px; left: 18px; font-size: 13px; color: rgba(255, 255, 255, .6); display: flex; align-items: center; gap: 7px; z-index: 3; }
+    .brand svg { width: 18px; height: 18px; }
+    .slide { width: min(680px, 100%); text-align: left; animation: rise .45s ease both; }
+    @keyframes rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+    @media (prefers-reduced-motion: reduce) { .slide { animation: none; } }
+    .kicker { text-transform: uppercase; letter-spacing: .12em; font-size: 12.5px; color: #b39dfa; font-weight: 600; }
+    .huge { font-size: clamp(56px, 14vw, 120px); font-weight: 750; letter-spacing: -.04em; line-height: 1; margin: 14px 0 8px; }
+    .huge small { font-size: .32em; font-weight: 600; color: #a09eb3; letter-spacing: 0; margin-left: 8px; }
+    .big { font-size: clamp(30px, 6.5vw, 50px); font-weight: 700; letter-spacing: -.03em; line-height: 1.1; margin: 12px 0 10px; }
+    .lede { font-size: 18px; color: #c9c7d8; line-height: 1.55; margin: 0; }
+    .lede b { color: #fff; }
+    .rows { margin-top: 26px; display: grid; gap: 12px; }
+    .rank { display: grid; grid-template-columns: 28px 1fr auto; gap: 12px; align-items: center; font-size: 18px; }
+    .rank .n { color: #6b6980; font-variant-numeric: tabular-nums; }
+    .rank .bar { grid-column: 2 / 4; height: 6px; border-radius: 3px; background: #1b1b26; overflow: hidden; margin-top: -4px; }
+    .rank .bar div { height: 100%; border-radius: 3px; }
+    .rank .v { color: #a09eb3; font-size: 15px; }
+    .facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 18px; margin-top: 26px; }
+    .facts div { border-top: 1px solid #272735; padding-top: 10px; }
+    .facts b { display: block; font-size: 24px; letter-spacing: -.02em; margin-top: 4px; }
+    .facts span { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: #a09eb3; }
+    .chart { margin-top: 24px; }
+    .card-img { width: 100%; height: auto; border-radius: 12px; display: block; margin-top: 18px; box-shadow: 0 20px 60px rgba(0, 0, 0, .45); }
+    .actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 20px; }
+    .nav { position: fixed; bottom: 18px; left: 0; right: 0; display: flex; justify-content: center; gap: 10px; z-index: 3; }
+    .nav button { background: rgba(255, 255, 255, .08); color: #ecebf5; border: 1px solid rgba(255, 255, 255, .14); border-radius: 999px; padding: 8px 16px; font: inherit; font-size: 14px; cursor: pointer; }
+    .nav button:disabled { opacity: .35; cursor: default; }
+    .stage { cursor: pointer; }
+    .stage a, .stage button { cursor: pointer; }
+    .years { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 22px; }
+    .glow { position: fixed; inset: -20%; background: radial-gradient(circle at 20% 15%, rgba(139, 92, 246, .28), transparent 45%), radial-gradient(circle at 85% 80%, rgba(6, 182, 212, .16), transparent 45%); pointer-events: none; transition: background 0.6s; }
+    .stage .daily { height: 150px; }
+  </style>
+</head>
+<body>
+  <div class="glow" id="glow"></div>
+  <div class="progress" id="progress"></div>
+  <div class="brand" id="brand"></div>
+  <main class="stage"><div id="slide" class="slide"><div class="lede">Loading your year…</div></div></main>
+  <nav class="nav">
+    <button id="prev" type="button" aria-label="Previous">←</button>
+    <button id="next" type="button" aria-label="Next">Next →</button>
+  </nav>
+  <script type="module" src="/wrapped/wrapped.js"></script>
+</body>
+</html>

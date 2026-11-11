@@ -223,6 +223,10 @@
 
       <!-- Share -->
       <section data-view="share" class="hidden">
+        <div class="banner" style="border-left-color:var(--accent);display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+          <span><b>Waqt Wrapped:</b> your year in code as shareable slides and an image.</span>
+          <a class="btn small primary" id="wrapped-link" href="/wrapped/" target="_blank" rel="noopener">Open my Wrapped</a>
+        </div>
         <div class="grid two" style="margin-top:22px">
           <div class="panel">
             <div class="panel-head"><h2>README card builder</h2><span class="muted">Live preview</span></div>
@@ -231,6 +235,7 @@
                 <select id="c-kind">
                   <option value="languages">Top languages</option>
                   <option value="stats">Coding stats</option>
+                  <option value="wrapped">Year in review (Wrapped)</option>
                   <option value="heatmap">Activity heatmap</option>
                   <option value="editors">Editors</option>
                   <option value="categories">Activity types</option>

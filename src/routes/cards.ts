@@ -1,8 +1,9 @@
 import { Hono } from 'hono';
-import { aiCard, badge, cardOptions, heatmapCard, hoursCard, messageCard, statsCard, topCard } from '../cards';
+import { aiCard, badge, cardOptions, heatmapCard, hoursCard, messageCard, statsCard, topCard, wrappedCard } from '../cards';
 import { type C, type AppEnv, cors, withSettings } from '../http';
 import { getStats, streaks } from '../stats';
-import { RANGES, durationText } from '../time';
+import { RANGES, durationText, todayIn } from '../time';
+import { tzOf } from '../settings';
 
 
 export const cards = new Hono<AppEnv>();
@@ -35,6 +36,15 @@ cards.get('/:kind', async (c) => {
   const s = c.get('settings');
   if (!s.public_enabled) return svg(c, messageCard('This profile is private.', o), 300);
 
+  if (kind === 'wrapped') {
+    const today = todayIn(tzOf(s));
+    const year = Math.trunc(Number(c.req.query('year'))) || Number(today.slice(0, 4));
+    if (year < 2000 || `${year}-01-01` > today) return svg(c, messageCard(`Nothing to show for ${year} yet.`, o), 300);
+    const end = `${year}-12-31` < today ? `${year}-12-31` : today;
+    const st = await getStats(c.env, s, { start: `${year}-01-01`, end, view: 'public' });
+    return svg(c, wrappedCard(st!, year, o), cacheSeconds(c));
+  }
+
   if (kind === 'heatmap') {
     const st = await getStats(c.env, s, { range: 'last_year', view: 'public' });
     return svg(c, heatmapCard(st!.days, st!.end, st!.total_seconds, o), cacheSeconds(c));
@@ -57,7 +67,7 @@ cards.get('/:kind', async (c) => {
   }
 
   const dim = TOP_DIMS[kind];
-  if (!dim) return svg(c, messageCard('Unknown card. Try languages, editors, os, categories, projects, stats, heatmap, hours or ai.', o), 300);
+  if (!dim) return svg(c, messageCard('Unknown card. Try languages, editors, os, categories, projects, stats, heatmap, hours, ai or wrapped.', o), 300);
   if (dim === 'projects' && !s.public_projects) {
     return svg(c, messageCard('Project names are private (turn on in Settings).', o), 300);
   }
