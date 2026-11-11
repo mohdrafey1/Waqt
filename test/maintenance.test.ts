@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { reparseUserAgents } from '../src/maintenance';
 import { loadSettings } from '../src/settings';
 import { PARSER_VERSION } from '../src/useragent';
-import { beats, env, post } from './helpers';
+import { auth, beats, env, json, post } from './helpers';
 
 describe('raw user agents', () => {
   it('stores each user agent once and links heartbeats to it', async () => {
@@ -29,5 +29,23 @@ describe('raw user agents', () => {
     expect((await loadSettings(env.DB)).parser_version).toBe(PARSER_VERSION);
     // Nothing left to change the second time.
     expect(await reparseUserAgents(env, await loadSettings(env.DB))).toBe(0);
+  });
+});
+
+describe('free plan usage meter', () => {
+  it('counts requests and database rows', async () => {
+    await post('/api/v1/users/current/heartbeats.bulk', beats(5, { project: 'usage', endAgo: 54000 }));
+    const { status, body } = await json('/api/v1/users/current/usage', { headers: auth });
+    expect(status).toBe(200);
+    const u = body.data;
+    expect(u.today.requests).toBeGreaterThan(0);
+    expect(u.today.rows_written).toBeGreaterThan(0);
+    expect(u.today.rows_read).toBeGreaterThan(0);
+    expect(u.limits.rows_written).toBe(100000);
+    expect(u.raw_heartbeats).toBeGreaterThan(0);
+  });
+
+  it('is private', async () => {
+    expect((await json('/api/v1/users/current/usage')).status).toBe(401);
   });
 });

@@ -73,6 +73,7 @@ function showTab(name) {
   if (name === 'timesheets') loadTimesheet();
   if (name === 'setup') {
     renderSetup();
+    renderUsage();
     renderInspector();
     renderImport();
   }
@@ -133,7 +134,8 @@ async function loadOverview() {
       showTab('setup');
     };
   } else {
-    $('#notice').innerHTML = '';
+    $('#notice').innerHTML = await usageWarning();
+    document.querySelectorAll('.go-setup').forEach((a) => (a.onclick = (e) => (e.preventDefault(), showTab('setup'))));
   }
 }
 
@@ -517,6 +519,40 @@ function renderSetup() {
           : `<span style="color:var(--ok)">On</span>, to ${esc(settings.forwarding.to)}`
     }</dd>`;
 }
+// ---------- free plan usage ----------
+const mb = (b) => `${(b / 1048576).toFixed(b < 10485760 ? 1 : 0)} MB`;
+async function renderUsage() {
+  try {
+    const { data: u } = await api('/users/current/usage');
+    const meter = (label, used, max, pct, fmtv = (n) => n.toLocaleString()) => {
+      const cls = pct >= 90 ? 'bad' : pct >= 70 ? 'warn' : '';
+      return `<div class="meter"><div class="top"><span>${label}</span><span class="muted">${esc(fmtv(used))} of ${esc(fmtv(max))} · ${pct}%</span></div>
+        <div class="track"><div class="${cls}" style="width:${Math.min(100, Math.max(pct, 0.5))}%"></div></div></div>`;
+    };
+    $('#usage-day').textContent = `Today (UTC) · ${u.raw_heartbeats.toLocaleString()} raw heartbeats stored`;
+    $('#usage-meters').innerHTML =
+      meter('Worker requests', u.today.requests, u.limits.requests, u.percent.requests) +
+      meter('Database rows written', u.today.rows_written, u.limits.rows_written, u.percent.rows_written) +
+      meter('Database rows read', u.today.rows_read, u.limits.rows_read, u.percent.rows_read) +
+      meter('Database size', u.db_size, u.limits.db_bytes, u.percent.db_size, mb);
+    return u;
+  } catch (e) {
+    $('#usage-meters').innerHTML = `<div class="muted">${esc(e.message)}</div>`;
+    return null;
+  }
+}
+async function usageWarning() {
+  try {
+    const { data: u } = await api('/users/current/usage');
+    const high = Object.entries(u.percent).filter(([, p]) => p >= 70);
+    if (!high.length) return '';
+    const names = { requests: 'Worker requests', rows_read: 'database reads', rows_written: 'database writes', db_size: 'database size' };
+    return `<div class="banner"><b>Close to a free-plan limit:</b> ${high.map(([k, p]) => `${names[k]} at ${p}%`).join(', ')}. See <a href="#setup" class="go-setup">Setup</a> for details.</div>`;
+  } catch {
+    return '';
+  }
+}
+
 // ---------- heartbeat inspector ----------
 const MODEL_WORDS = /^(opus|sonnet|haiku|fable|mythos|gpt|gemini|gemma|qwen|deepseek|llama|mistral|grok|kimi|glm|o)\b/i;
 function cell(value, { odd = false, title = '' } = {}) {

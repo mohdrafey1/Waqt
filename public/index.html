@@ -257,6 +257,12 @@
             <p class="muted" style="margin:0;font-size:13px">Your editor can only send to one server, so Waqt can pass every heartbeat on to WakaTime for you. In Cloudflare, open this Worker → <b>Settings → Variables and Secrets → Add</b>, choose <b>Secret</b>, name it <code>WAKATIME_API_KEY</code> and paste your key from <a href="https://wakatime.com/api-key" target="_blank" rel="noopener">wakatime.com/api-key</a>. New activity then goes to both.</p>
           </div>
         </div>
+        <div class="panel section" id="usage-panel">
+          <div class="panel-head"><h2>Cloudflare free plan usage</h2><span class="muted" id="usage-day"></span></div>
+          <div class="grid two" id="usage-meters" style="gap:14px 28px"></div>
+          <p class="faint" style="font-size:12.5px;margin-bottom:0">Estimates counted by Waqt itself (slightly low, never high). Daily limits reset at 00:00 UTC. Static pages like this dashboard don't count as requests.</p>
+        </div>
+
         <div class="panel section" id="inspector">
           <div class="panel-head"><h2>Recent heartbeats</h2>
             <div class="row">

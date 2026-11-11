@@ -3,6 +3,7 @@ import { retryForwardQueue } from './forward';
 import { maybeSendWeekly } from './report';
 import { type AppEnv, configuredKey } from './http';
 import { reparseUserAgents } from './maintenance';
+import { countRequest, flushUsage, trackDb } from './usage';
 import { ensureMigrated } from './migrate';
 import { PARSER_VERSION } from './useragent';
 import { badges, cards } from './routes/cards';
@@ -26,9 +27,18 @@ app.onError((err, c) => {
 });
 
 export default {
-  fetch: app.fetch,
+  // Every request goes through a D1 handle that counts rows for the usage meter.
+  async fetch(request: Request, env: Env, ctx: ExecutionContext) {
+    countRequest();
+    const raw = env.DB;
+    const res = await app.fetch(request, { ...env, DB: trackDb(raw) }, ctx);
+    ctx.waitUntil(flushUsage(raw));
+    return res;
+  },
   // Every 15 minutes: finish any pending day summaries; once a day: prune old raw data.
-  async scheduled(_event: ScheduledController, env: Env, ctx: ExecutionContext) {
+  async scheduled(_event: ScheduledController, rawEnv: Env, ctx: ExecutionContext) {
+    countRequest();
+    const env = { ...rawEnv, DB: trackDb(rawEnv.DB) };
     ctx.waitUntil(
       (async () => {
         await ensureMigrated(env.DB);
@@ -43,6 +53,7 @@ export default {
         await pruneRaw(env, s);
         await retryForwardQueue(env, s);
         await maybeSendWeekly(env, s);
+        await flushUsage(rawEnv.DB, true);
       })(),
     );
   },

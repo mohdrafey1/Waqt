@@ -5,6 +5,7 @@ import { MAX_BATCH, ingest } from '../ingest';
 import { importer } from './importer';
 import { buildReport, sendReport } from '../report';
 import { reparseUserAgents } from '../maintenance';
+import { usageReport } from '../usage';
 import { aliasOf, loadSettings, publicSettingsView, saveSettings, tzOf } from '../settings';
 import { clearCache, getStats, streaks } from '../stats';
 import { README_SECTIONS, renderReadme } from '../readme';
@@ -295,6 +296,13 @@ api.get('/users/current/timesheet', requireAuth, async (c) => {
     .map((r) => ({ ...r, seconds: Math.round(r.seconds) }))
     .sort((a, b) => (a.day < b.day ? -1 : a.day > b.day ? 1 : b.seconds - a.seconds));
   return c.json({ data: { start, end, currency: s.currency, rates: s.label_rates, display_name: s.display_name || s.username, rows } });
+});
+
+// Estimated usage against Cloudflare's free-plan limits.
+api.get('/users/current/usage', requireAuth, async (c) => {
+  const report = await usageReport(c.env.DB);
+  const raw = await c.env.DB.prepare('SELECT COUNT(*) AS n FROM heartbeats').first<{ n: number }>();
+  return c.json({ data: { ...report, raw_heartbeats: raw?.n || 0, raw_retention_days: c.get('settings').raw_retention_days } });
 });
 
 // Heartbeat inspector: the latest heartbeats exactly as stored, with the raw user agent.
