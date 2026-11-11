@@ -105,7 +105,7 @@ Waqt sends the heartbeats exactly as your editor sent them (AI fields, dependenc
 
 ### Import your WakaTime history
 
-With `WAKATIME_API_KEY` set, open **Setup → Import from WakaTime**. Waqt asks WakaTime for an export of all your heartbeats, your browser counts the time (with the same code the server uses) and Waqt stores compact daily totals, including time of day, AI usage, files and branches. Only days before Waqt's first heartbeat are imported, so nothing is counted twice. WakaTime keeps an export for a while and won't make a new one until it expires, so if the export is a few days old, Waqt fetches the missing days one at a time. Importing again replaces the previous import, and **Remove imported data** undoes it. You can also upload an export file you downloaded from WakaTime yourself.
+With `WAKATIME_API_KEY` set, open **Setup → Import from WakaTime**. Waqt asks WakaTime for an export of all your heartbeats, your browser counts the time (with the same code the server uses) and Waqt stores compact daily totals, including time of day, AI usage, files and branches. Only days before Waqt's first heartbeat are imported, so nothing is counted twice. WakaTime keeps an export for a while and won't make a new one until it expires, so if the export is a few days old, Waqt fetches the missing days one at a time. If the import says WakaTime refused the key, press **Test the WakaTime key**: it shows WakaTime's own reason. Importing again replaces the previous import, and **Remove imported data** undoes it. You can also upload an export file you downloaded from WakaTime yourself.
 
 ## Add stats to your GitHub README
 
@@ -317,7 +317,7 @@ npm run dev                      # http://localhost:8787
 Point a local `~/.wakatime.cfg` at `http://localhost:8787/api/v1` to test with a real editor.
 
 ```bash
-npm test          # 72 tests in the Workers runtime (Vitest + @cloudflare/vitest-plugin)
+npm test          # 74 tests in the Workers runtime (Vitest + @cloudflare/vitest-plugin)
 npm run typecheck
 ```
 

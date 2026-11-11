@@ -843,6 +843,31 @@ async function startImport(file) {
   renderImport();
 }
 
+$('#waka-check').onclick = async () => {
+  const box = $('#waka-check-result');
+  box.classList.remove('hidden');
+  box.innerHTML = '<span class="muted">Asking WakaTime…</span>';
+  try {
+    const { data: r } = await api('/users/current/import/wakatime/check', { method: 'POST' });
+    if (!r.set) {
+      box.innerHTML = 'No <code>WAKATIME_API_KEY</code> secret is set on this Worker.';
+      return;
+    }
+    const line = (ok, label, x) =>
+      `<div>${ok ? '<span style="color:var(--ok)">✓</span>' : '<span style="color:var(--danger)">✕</span>'} ${label}${
+        ok ? '' : ` <span class="muted">(WakaTime answered ${x.status || 'nothing'}${x.reason ? `: ${esc(x.reason)}` : ''})</span>`
+      }</div>`;
+    box.innerHTML =
+      `<div class="muted" style="margin-bottom:4px">Saved value: <code>${esc(r.hint)}</code>, sent as ${r.kind === 'api_key' ? 'an API key' : 'an OAuth token'}.</div>` +
+      line(r.account.ok, r.user ? `Signed in to WakaTime as <b>${esc(r.user.username || 'you')}</b>${r.user.plan ? ` (${esc(r.user.plan)} plan)` : ''}` : 'Signed in to WakaTime', r.account) +
+      line(r.import.ok, 'Can read your history (needed for import)', r.import) +
+      (r.account.ok && r.import.ok
+        ? ''
+        : '<div style="margin-top:6px">Copy the <b>Secret API Key</b> from <a href="https://wakatime.com/api-key" target="_blank" rel="noopener">wakatime.com/api-key</a> (it starts with <code>waka_</code>) and save it in Cloudflare as the Secret <code>WAKATIME_API_KEY</code>, with no quotes or spaces. If you generated a new key on WakaTime, the old one stops working.</div>');
+  } catch (e) {
+    box.textContent = e.message;
+  }
+};
 $('#import-start').onclick = () => startImport();
 $('#import-file').onchange = (e) => e.target.files[0] && startImport(e.target.files[0]);
 $('#import-remove').onclick = async () => {

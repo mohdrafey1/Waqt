@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { forwardKey } from '../forward';
+import { forwardKey, wakatimeAuth, wakatimeReason } from '../forward';
 import { type AppEnv, type C, requireAuth } from '../http';
 import { Settings, saveSettings, tzOf } from '../settings';
 import { clearCache } from '../stats';
@@ -23,7 +23,7 @@ const wakatime = (c: C) => ((c.env as { WAKATIME_IMPORT_URL?: string }).WAKATIME
 const MAX_DAYS_PER_REQUEST = 62;
 
 function wakaHeaders(c: C): Record<string, string> {
-  return { Authorization: 'Basic ' + btoa(forwardKey(c.env)), Accept: 'application/json', 'Content-Type': 'application/json' };
+  return { Authorization: wakatimeAuth(c.env), Accept: 'application/json', 'Content-Type': 'application/json' };
 }
 
 /** Unix time where Waqt's own data begins; WakaTime data is only imported before this. */
@@ -42,8 +42,13 @@ type Dump = { id: string; type: string; status: string; percent_complete: number
 
 async function latestHeartbeatsDump(c: C): Promise<Dump | null> {
   const res = await fetch(`${wakatime(c)}/users/current/data_dumps`, { headers: wakaHeaders(c) });
-  if (res.status === 401) throw new Error('WakaTime rejected the WAKATIME_API_KEY secret.');
-  if (!res.ok) throw new Error(`WakaTime answered with status ${res.status}.`);
+  if (!res.ok) {
+    const why = await wakatimeReason(res);
+    if (res.status === 401 || res.status === 403) {
+      throw new Error(`WakaTime refused the WAKATIME_API_KEY secret (${res.status}${why ? `: ${why}` : ''}). Use the Secret API Key from wakatime.com/api-key, or press "Test the WakaTime key".`);
+    }
+    throw new Error(`WakaTime answered with status ${res.status}${why ? `: ${why}` : ''}.`);
+  }
   const body = (await res.json()) as { data?: Dump[] };
   const dumps = (body.data || []).filter((d) => d.type === 'heartbeats');
   return dumps[0] || null;
@@ -115,6 +120,35 @@ importer.get('/wakatime/download', async (c) => {
   const len = file.headers.get('Content-Length');
   if (len) headers.set('Content-Length', len);
   return new Response(file.body, { headers });
+});
+
+// Check the WAKATIME_API_KEY secret: who it belongs to, and whether it can send
+// heartbeats (forwarding) and read them (import). Nothing is written to WakaTime.
+importer.post('/wakatime/check', async (c) => {
+  const key = forwardKey(c.env);
+  if (!key) return c.json({ data: { set: false } });
+  const kind = wakatimeAuth(c.env).startsWith('Basic') ? 'api_key' : 'oauth_token';
+  const hint = `${key.slice(0, 5)}…${key.slice(-4)}`;
+  const probe = async (path: string) => {
+    try {
+      const res = await fetch(`${wakatime(c)}${path}`, { headers: wakaHeaders(c) });
+      if (res.ok) return { ok: true as const, body: (await res.json().catch(() => ({}))) as any };
+      return { ok: false as const, status: res.status, reason: await wakatimeReason(res) };
+    } catch (e) {
+      return { ok: false as const, status: 0, reason: String((e as Error).message || e) };
+    }
+  };
+  const [user, dumps] = await Promise.all([probe('/users/current'), probe('/users/current/data_dumps')]);
+  return c.json({
+    data: {
+      set: true,
+      kind,
+      hint,
+      user: user.ok ? { username: user.body?.data?.username || user.body?.data?.display_name || '', plan: user.body?.data?.plan || '' } : null,
+      account: user.ok ? { ok: true } : { ok: false, status: user.status, reason: user.reason },
+      import: dumps.ok ? { ok: true } : { ok: false, status: dumps.status, reason: dumps.reason },
+    },
+  });
 });
 
 // One day of heartbeats straight from WakaTime. WakaTime keeps an export for a while

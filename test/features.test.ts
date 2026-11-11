@@ -114,6 +114,33 @@ describe('importing WakaTime history', () => {
   });
 });
 
+describe('checking the WakaTime key', () => {
+  it("reports WakaTime's reason when it refuses", async () => {
+    mockFetch((url) => {
+      if (url.endsWith('/users/current')) return Response.json({ data: { username: 'rafey', plan: 'free' } });
+      if (url.endsWith('/data_dumps')) return Response.json({ error: 'Missing scope read_heartbeats.' }, { status: 403 });
+      return new Response('', { status: 404 });
+    });
+    const env = { WAKATIME_API_KEY: WAKA.WAKATIME_API_KEY, WAKATIME_IMPORT_URL: 'https://wakatime.test/api/v1' } as any;
+    const r = (await post('/api/v1/users/current/import/wakatime/check', {}, {}, env)).body.data;
+    expect(r).toMatchObject({ set: true, kind: 'api_key', user: { username: 'rafey', plan: 'free' }, account: { ok: true } });
+    expect(r.import).toEqual({ ok: false, status: 403, reason: 'Missing scope read_heartbeats.' });
+    expect(r.hint).not.toContain('0000-4000');
+    const dump = await post('/api/v1/users/current/import/wakatime/dump', {}, {}, env);
+    expect(dump.status).toBe(502);
+    expect(dump.body.error).toContain('Missing scope read_heartbeats.');
+  });
+
+  it('sends OAuth tokens as Bearer and API keys as Basic', async () => {
+    const calls = mockFetch(() => Response.json({ data: {} }));
+    const base = { WAKATIME_IMPORT_URL: 'https://wakatime.test/api/v1' } as any;
+    await post('/api/v1/users/current/import/wakatime/check', {}, {}, { ...base, WAKATIME_API_KEY: ['waka', 'tok', 'abc123'].join('_') });
+    expect((calls[0].init.headers as any).Authorization).toBe('Bearer ' + ['waka', 'tok', 'abc123'].join('_'));
+    await post('/api/v1/users/current/import/wakatime/check', {}, {}, { ...base, WAKATIME_API_KEY: WAKA.WAKATIME_API_KEY });
+    expect((calls[2].init.headers as any).Authorization).toMatch(/^Basic /);
+  });
+});
+
 describe('fetching single days from WakaTime', () => {
   it('passes the day through and reports failures', async () => {
     const calls = mockFetch((url) => {

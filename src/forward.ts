@@ -16,7 +16,30 @@ const RETRIES_PER_RUN = 10;
 type Headers = { ua: string; machine: string; tz: string };
 
 export function forwardKey(env: Env): string {
-  return (env.WAKATIME_API_KEY || '').trim();
+  return (env.WAKATIME_API_KEY || '').trim().replace(/^["']|["']$/g, '');
+}
+
+/**
+ * How to send the WakaTime credential: an API key ("waka_" + UUID, or a bare UUID)
+ * goes as HTTP Basic, anything else (an OAuth access token) as a Bearer token.
+ */
+export function wakatimeAuth(env: Env): string {
+  const k = forwardKey(env);
+  return /^(waka_)?[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(k) ? 'Basic ' + btoa(k) : 'Bearer ' + k;
+}
+
+/** WakaTime's own explanation from an error response, shortened. */
+export async function wakatimeReason(res: Response): Promise<string> {
+  const text = await res.text().catch(() => '');
+  let msg = '';
+  try {
+    const j = JSON.parse(text) as { error?: unknown; errors?: unknown; message?: unknown };
+    const e = j.error ?? j.message ?? j.errors;
+    msg = Array.isArray(e) ? e.map(String).join('; ') : typeof e === 'string' ? e : e ? JSON.stringify(e) : '';
+  } catch {
+    msg = /<html/i.test(text) ? '' : text;
+  }
+  return msg.replace(/\s+/g, ' ').trim().slice(0, 160);
 }
 
 /** Forwarding runs when the secret is set and the dashboard switch is on. */
@@ -41,19 +64,23 @@ type SendResult = { ok: true } | { ok: false; retry: boolean; error: string };
 async function send(env: Env, body: string, headers: Headers): Promise<SendResult> {
   const h: Record<string, string> = {
     'Content-Type': 'application/json',
-    Authorization: 'Basic ' + btoa(forwardKey(env)),
+    Authorization: wakatimeAuth(env),
   };
   if (headers.ua) h['User-Agent'] = headers.ua;
   if (headers.machine) h['X-Machine-Name'] = headers.machine;
   if (headers.tz) h['Timezone'] = headers.tz;
   try {
     const res = await fetch(`${forwardTarget(env)}/users/current/heartbeats.bulk`, { method: 'POST', headers: h, body });
-    await res.arrayBuffer().catch(() => null);
-    if (res.ok) return { ok: true };
+    if (res.ok) {
+      await res.arrayBuffer().catch(() => null);
+      return { ok: true };
+    }
     if (res.status === 401 || res.status === 403) {
       // Keep the data: it can be delivered once the key is fixed.
-      return { ok: false, retry: true, error: `WakaTime rejected the key (${res.status}). Check the WAKATIME_API_KEY secret.` };
+      const why = await wakatimeReason(res);
+      return { ok: false, retry: true, error: `WakaTime rejected the key (${res.status}${why ? `: ${why}` : ''}). Check the WAKATIME_API_KEY secret.` };
     }
+    await res.arrayBuffer().catch(() => null);
     if (res.status === 429 || res.status >= 500) {
       return { ok: false, retry: true, error: `WakaTime answered with status ${res.status}; will retry.` };
     }

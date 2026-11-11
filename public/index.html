@@ -363,7 +363,9 @@
             <button class="btn primary" id="import-start" type="button">Import from WakaTime</button>
             <label class="btn" style="cursor:pointer">Use an export file<input type="file" id="import-file" accept=".json,application/json" hidden></label>
             <button class="btn" id="import-remove" type="button">Remove imported data</button>
+            <button class="btn" id="waka-check" type="button">Test the WakaTime key</button>
           </div>
+          <div id="waka-check-result" class="hidden" style="margin-top:12px;font-size:13.5px"></div>
           <div id="import-progress" class="hidden" style="margin-top:16px">
             <div class="track" style="height:8px;background:var(--panel-2);border-radius:5px;overflow:hidden"><div id="import-bar" style="height:100%;width:0;background:var(--accent);transition:width .3s"></div></div>
             <div class="muted" id="import-status" style="margin-top:8px;font-size:13px"></div>
