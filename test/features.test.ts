@@ -114,30 +114,36 @@ describe('importing WakaTime history', () => {
   });
 });
 
-describe('checking the WakaTime key', () => {
-  it("reports WakaTime's reason when it refuses", async () => {
-    mockFetch((url) => {
+describe('checking the WakaTime credentials', () => {
+  const TOKEN = ['waka', 'tok', 'abc123'].join('_');
+  const PLUGINS_ONLY = { error: 'API Keys are only for plugins, use your personal oauth token (https://wakatime.com/oauth) instead.' };
+
+  it('uses the API key to send and the OAuth token to read', async () => {
+    const calls = mockFetch((url, init) => {
+      const auth = (init.headers as any).Authorization as string;
+      if (url.endsWith('/statusbar/today')) return auth.startsWith('Basic ') ? Response.json({ data: {} }) : new Response('', { status: 401 });
+      if (auth.startsWith('Basic ')) return Response.json(PLUGINS_ONLY, { status: 403 });
       if (url.endsWith('/users/current')) return Response.json({ data: { username: 'rafey', plan: 'free' } });
-      if (url.endsWith('/data_dumps')) return Response.json({ error: 'Missing scope read_heartbeats.' }, { status: 403 });
+      if (url.endsWith('/data_dumps')) return Response.json({ data: [] });
       return new Response('', { status: 404 });
     });
-    const env = { WAKATIME_API_KEY: WAKA.WAKATIME_API_KEY, WAKATIME_IMPORT_URL: 'https://wakatime.test/api/v1' } as any;
-    const r = (await post('/api/v1/users/current/import/wakatime/check', {}, {}, env)).body.data;
-    expect(r).toMatchObject({ set: true, kind: 'api_key', user: { username: 'rafey', plan: 'free' }, account: { ok: true } });
-    expect(r.import).toEqual({ ok: false, status: 403, reason: 'Missing scope read_heartbeats.' });
-    expect(r.hint).not.toContain('0000-4000');
-    const dump = await post('/api/v1/users/current/import/wakatime/dump', {}, {}, env);
-    expect(dump.status).toBe(502);
-    expect(dump.body.error).toContain('Missing scope read_heartbeats.');
-  });
+    const base = { WAKATIME_API_KEY: WAKA.WAKATIME_API_KEY, WAKATIME_IMPORT_URL: 'https://wakatime.test/api/v1' } as any;
 
-  it('sends OAuth tokens as Bearer and API keys as Basic', async () => {
-    const calls = mockFetch(() => Response.json({ data: {} }));
-    const base = { WAKATIME_IMPORT_URL: 'https://wakatime.test/api/v1' } as any;
-    await post('/api/v1/users/current/import/wakatime/check', {}, {}, { ...base, WAKATIME_API_KEY: ['waka', 'tok', 'abc123'].join('_') });
-    expect((calls[0].init.headers as any).Authorization).toBe('Bearer ' + ['waka', 'tok', 'abc123'].join('_'));
-    await post('/api/v1/users/current/import/wakatime/check', {}, {}, { ...base, WAKATIME_API_KEY: WAKA.WAKATIME_API_KEY });
-    expect((calls[2].init.headers as any).Authorization).toMatch(/^Basic /);
+    // API key only: sending works, reading is refused with WakaTime's reason.
+    let r = (await post('/api/v1/users/current/import/wakatime/check', {}, {}, base)).body.data;
+    expect(r.api_key.send).toEqual({ ok: true });
+    expect(r.read_with).toBe('WAKATIME_API_KEY');
+    expect(r.import).toEqual({ ok: false, status: 403, reason: PLUGINS_ONLY.error });
+    const dump = await post('/api/v1/users/current/import/wakatime/dump', {}, {}, base);
+    expect(dump.status).toBe(502);
+    expect(dump.body.error).toContain('WAKATIME_OAUTH_TOKEN');
+
+    // With the OAuth token, reading works too; it's sent as a Bearer token.
+    calls.length = 0;
+    r = (await post('/api/v1/users/current/import/wakatime/check', {}, {}, { ...base, WAKATIME_OAUTH_TOKEN: TOKEN })).body.data;
+    expect(r).toMatchObject({ read_with: 'WAKATIME_OAUTH_TOKEN', user: { username: 'rafey' }, account: { ok: true }, import: { ok: true } });
+    expect(r.oauth_token.hint).not.toContain('abc1');
+    expect(calls.some((x) => (x.init.headers as any).Authorization === 'Bearer ' + TOKEN)).toBe(true);
   });
 });
 

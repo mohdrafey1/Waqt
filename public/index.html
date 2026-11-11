@@ -328,7 +328,7 @@
             <dl class="kv" id="status"></dl>
             <p class="faint" style="font-size:12.5px">Raw activity is kept for your retention window; daily totals are kept forever, so your full history stays. Everything lives in your own Cloudflare account.</p>
             <h3 style="font-size:13px;margin:18px 0 6px">Keep WakaTime too (optional)</h3>
-            <p class="muted" style="margin:0;font-size:13px">Your editor can only send to one server, so Waqt can pass every heartbeat on to WakaTime for you. In Cloudflare, open this Worker → <b>Settings → Variables and Secrets → Add</b>, choose <b>Secret</b>, name it <code>WAKATIME_API_KEY</code> and paste your key from <a href="https://wakatime.com/api-key" target="_blank" rel="noopener">wakatime.com/api-key</a>. New activity then goes to both.</p>
+            <p class="muted" style="margin:0;font-size:13px">Your editor can only send to one server, so Waqt can pass every heartbeat on to WakaTime for you. In Cloudflare, open this Worker → <b>Settings → Variables and Secrets → Add</b>, choose <b>Secret</b>, name it <code>WAKATIME_API_KEY</code> and paste your Secret API Key from <a href="https://wakatime.com/api-key" target="_blank" rel="noopener">wakatime.com/api-key</a>. New activity then goes to both. (Importing history uses a different credential: see below.)</p>
           </div>
         </div>
         <div class="panel section" id="usage-panel">
@@ -358,7 +358,7 @@
         <div class="panel section" id="import-panel">
           <div class="panel-head"><h2>Import your WakaTime history</h2><span class="muted" id="import-summary"></span></div>
           <p class="muted" style="margin-top:0">Bring your past coding time over from WakaTime. Only activity from before Waqt's first heartbeat (<b id="import-cutoff">—</b>) is imported, so nothing is counted twice. Your browser does the counting, then Waqt stores compact daily totals.</p>
-          <div id="import-nokey" class="banner hidden" style="margin:0 0 14px">To import automatically, add your key from <a href="https://wakatime.com/api-key" target="_blank" rel="noopener">wakatime.com/api-key</a> as the <code>WAKATIME_API_KEY</code> secret (Cloudflare → this Worker → Settings → Variables and Secrets). You can turn forwarding off below if you only want the import.</div>
+          <div id="import-nokey" class="banner hidden" style="margin:0 0 14px">To import automatically, copy your personal token from <a href="https://wakatime.com/oauth" target="_blank" rel="noopener">wakatime.com/oauth</a> and add it as the Secret <code>WAKATIME_OAUTH_TOKEN</code> (Cloudflare → this Worker → Settings → Variables and Secrets). WakaTime only lets API keys send activity, not read it. You can also upload an export file instead.</div>
           <div class="row">
             <button class="btn primary" id="import-start" type="button">Import from WakaTime</button>
             <label class="btn" style="cursor:pointer">Use an export file<input type="file" id="import-file" accept=".json,application/json" hidden></label>

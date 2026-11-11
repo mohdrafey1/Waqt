@@ -10,6 +10,11 @@ export interface Env {
   WAKATIME_API_KEY?: string;
   /** Optional: forward somewhere other than WakaTime (any WakaTime-compatible API). */
   WAKATIME_API_URL?: string;
+  /**
+   * Optional: your personal OAuth token from wakatime.com/oauth, for importing history.
+   * WakaTime only lets API keys send heartbeats (what plugins do), not read data.
+   */
+  WAKATIME_OAUTH_TOKEN?: string;
   /** Where to look for new versions; "off" disables the daily check. */
   WAQT_VERSION_URL?: string;
 }

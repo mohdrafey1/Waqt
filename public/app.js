@@ -849,21 +849,26 @@ $('#waka-check').onclick = async () => {
   box.innerHTML = '<span class="muted">Asking WakaTime…</span>';
   try {
     const { data: r } = await api('/users/current/import/wakatime/check', { method: 'POST' });
-    if (!r.set) {
-      box.innerHTML = 'No <code>WAKATIME_API_KEY</code> secret is set on this Worker.';
-      return;
+    const mark = (ok) => (ok ? '<span style="color:var(--ok)">✓</span>' : '<span style="color:var(--danger)">✕</span>');
+    const why = (x) => (x && !x.ok ? ` <span class="muted">(WakaTime answered ${x.status || 'nothing'}${x.reason ? `: ${esc(x.reason)}` : ''})</span>` : '');
+    let html = '';
+    // Forwarding: the API key
+    if (r.api_key.set) html += `<div>${mark(r.api_key.send.ok)} <b>Sending activity to WakaTime</b> with <code>WAKATIME_API_KEY</code> (<code>${esc(r.api_key.hint)}</code>)${why(r.api_key.send)}</div>`;
+    else html += '<div class="muted">Sending activity to WakaTime: off (no <code>WAKATIME_API_KEY</code> secret).</div>';
+    // Import: the OAuth token
+    if (r.read_with) {
+      const who = r.user ? ` as <b>${esc(r.user.username || 'you')}</b>${r.user.plan ? ` (${esc(r.user.plan)} plan)` : ''}` : '';
+      html += `<div>${mark(r.account.ok && r.import.ok)} <b>Importing history</b> with <code>${r.read_with}</code>${r.read_with === 'WAKATIME_OAUTH_TOKEN' ? ` (<code>${esc(r.oauth_token.hint)}</code>)` : ''}${who}${why(!r.account.ok ? r.account : r.import)}</div>`;
+    } else {
+      html += '<div class="muted">Importing history: no credential set.</div>';
     }
-    const line = (ok, label, x) =>
-      `<div>${ok ? '<span style="color:var(--ok)">✓</span>' : '<span style="color:var(--danger)">✕</span>'} ${label}${
-        ok ? '' : ` <span class="muted">(WakaTime answered ${x.status || 'nothing'}${x.reason ? `: ${esc(x.reason)}` : ''})</span>`
-      }</div>`;
-    box.innerHTML =
-      `<div class="muted" style="margin-bottom:4px">Saved value: <code>${esc(r.hint)}</code>, sent as ${r.kind === 'api_key' ? 'an API key' : 'an OAuth token'}.</div>` +
-      line(r.account.ok, r.user ? `Signed in to WakaTime as <b>${esc(r.user.username || 'you')}</b>${r.user.plan ? ` (${esc(r.user.plan)} plan)` : ''}` : 'Signed in to WakaTime', r.account) +
-      line(r.import.ok, 'Can read your history (needed for import)', r.import) +
-      (r.account.ok && r.import.ok
-        ? ''
-        : '<div style="margin-top:6px">Copy the <b>Secret API Key</b> from <a href="https://wakatime.com/api-key" target="_blank" rel="noopener">wakatime.com/api-key</a> (it starts with <code>waka_</code>) and save it in Cloudflare as the Secret <code>WAKATIME_API_KEY</code>, with no quotes or spaces. If you generated a new key on WakaTime, the old one stops working.</div>');
+    const needToken = r.read_with !== 'WAKATIME_OAUTH_TOKEN' && !(r.account?.ok && r.import?.ok);
+    if (needToken) {
+      html += '<div style="margin-top:6px">For importing, copy your personal token from <a href="https://wakatime.com/oauth" target="_blank" rel="noopener">wakatime.com/oauth</a> and add it in Cloudflare as a second Secret named <code>WAKATIME_OAUTH_TOKEN</code>. Keep <code>WAKATIME_API_KEY</code> (from <a href="https://wakatime.com/api-key" target="_blank" rel="noopener">wakatime.com/api-key</a>) for sending activity.</div>';
+    } else if (r.api_key.set && !r.api_key.send.ok) {
+      html += '<div style="margin-top:6px">For sending activity, <code>WAKATIME_API_KEY</code> must be the Secret API Key from <a href="https://wakatime.com/api-key" target="_blank" rel="noopener">wakatime.com/api-key</a> (it starts with <code>waka_</code>).</div>';
+    }
+    box.innerHTML = html;
   } catch (e) {
     box.textContent = e.message;
   }

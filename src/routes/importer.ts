@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { forwardKey, wakatimeAuth, wakatimeReason } from '../forward';
+import { authHeader, forwardKey, importToken, wakatimeReason } from '../forward';
 import { type AppEnv, type C, requireAuth } from '../http';
 import { Settings, saveSettings, tzOf } from '../settings';
 import { clearCache } from '../stats';
@@ -23,7 +23,7 @@ const wakatime = (c: C) => ((c.env as { WAKATIME_IMPORT_URL?: string }).WAKATIME
 const MAX_DAYS_PER_REQUEST = 62;
 
 function wakaHeaders(c: C): Record<string, string> {
-  return { Authorization: wakatimeAuth(c.env), Accept: 'application/json', 'Content-Type': 'application/json' };
+  return { Authorization: authHeader(importToken(c.env)), Accept: 'application/json', 'Content-Type': 'application/json' };
 }
 
 /** Unix time where Waqt's own data begins; WakaTime data is only imported before this. */
@@ -45,7 +45,7 @@ async function latestHeartbeatsDump(c: C): Promise<Dump | null> {
   if (!res.ok) {
     const why = await wakatimeReason(res);
     if (res.status === 401 || res.status === 403) {
-      throw new Error(`WakaTime refused the WAKATIME_API_KEY secret (${res.status}${why ? `: ${why}` : ''}). Use the Secret API Key from wakatime.com/api-key, or press "Test the WakaTime key".`);
+      throw new Error(`WakaTime refused the credential (${res.status}${why ? `: ${why}` : ''}). Add your personal token from wakatime.com/oauth as the WAKATIME_OAUTH_TOKEN secret, then press "Test the WakaTime key".`);
     }
     throw new Error(`WakaTime answered with status ${res.status}${why ? `: ${why}` : ''}.`);
   }
@@ -62,7 +62,8 @@ importer.get('/status', async (c) => {
   ).first<{ days: number; first: string | null; last: string | null; secs: number | null }>();
   return c.json({
     data: {
-      wakatime_key: !!forwardKey(c.env),
+      wakatime_key: !!importToken(c.env),
+      oauth_token: !!(c.env as { WAKATIME_OAUTH_TOKEN?: string }).WAKATIME_OAUTH_TOKEN,
       own_since: since,
       own_since_day: since ? dayOf(since, tzOf(s)) : null,
       timezone: tzOf(s),
@@ -74,7 +75,7 @@ importer.get('/status', async (c) => {
 
 // Ask WakaTime to prepare an export of all heartbeats (or report on the one in progress).
 importer.post('/wakatime/dump', async (c) => {
-  if (!forwardKey(c.env)) return c.json({ error: 'Add your WakaTime key as the WAKATIME_API_KEY secret first.' }, 400);
+  if (!importToken(c.env)) return c.json({ error: 'Add your personal token from wakatime.com/oauth as the WAKATIME_OAUTH_TOKEN secret first.' }, 400);
   try {
     let dump = await latestHeartbeatsDump(c);
     const expired = dump && dump.expires && Date.parse(dump.expires) < Date.now();
@@ -109,7 +110,7 @@ importer.post('/wakatime/dump', async (c) => {
 
 // Stream the finished export through to the browser (no parsing here).
 importer.get('/wakatime/download', async (c) => {
-  if (!forwardKey(c.env)) return c.json({ error: 'WAKATIME_API_KEY is not set.' }, 400);
+  if (!importToken(c.env)) return c.json({ error: 'WAKATIME_OAUTH_TOKEN is not set.' }, 400);
   const dump = await latestHeartbeatsDump(c).catch(() => null);
   if (!dump || dump.status !== 'Completed' || !dump.download_url) return c.json({ error: 'The export is not ready yet.' }, 409);
   const url = new URL(dump.download_url);
@@ -122,31 +123,37 @@ importer.get('/wakatime/download', async (c) => {
   return new Response(file.body, { headers });
 });
 
-// Check the WAKATIME_API_KEY secret: who it belongs to, and whether it can send
-// heartbeats (forwarding) and read them (import). Nothing is written to WakaTime.
+// Check both WakaTime credentials: the API key sends heartbeats (forwarding), the
+// personal OAuth token reads them (import). Read-only: nothing is written to WakaTime.
 importer.post('/wakatime/check', async (c) => {
-  const key = forwardKey(c.env);
-  if (!key) return c.json({ data: { set: false } });
-  const kind = wakatimeAuth(c.env).startsWith('Basic') ? 'api_key' : 'oauth_token';
-  const hint = `${key.slice(0, 5)}…${key.slice(-4)}`;
-  const probe = async (path: string) => {
+  const apiKey = forwardKey(c.env);
+  const oauth = ((c.env as { WAKATIME_OAUTH_TOKEN?: string }).WAKATIME_OAUTH_TOKEN || '').trim();
+  const readWith = importToken(c.env);
+  const hint = (k: string) => (k ? `${k.slice(0, 5)}…${k.slice(-4)}` : '');
+  const probe = async (path: string, credential: string) => {
     try {
-      const res = await fetch(`${wakatime(c)}${path}`, { headers: wakaHeaders(c) });
+      const res = await fetch(`${wakatime(c)}${path}`, { headers: { Authorization: authHeader(credential), Accept: 'application/json' } });
       if (res.ok) return { ok: true as const, body: (await res.json().catch(() => ({}))) as any };
       return { ok: false as const, status: res.status, reason: await wakatimeReason(res) };
     } catch (e) {
       return { ok: false as const, status: 0, reason: String((e as Error).message || e) };
     }
   };
-  const [user, dumps] = await Promise.all([probe('/users/current'), probe('/users/current/data_dumps')]);
+  // The status bar endpoint is one plugins call with their API key.
+  const [send, user, dumps] = await Promise.all([
+    apiKey ? probe('/users/current/statusbar/today', apiKey) : null,
+    readWith ? probe('/users/current', readWith) : null,
+    readWith ? probe('/users/current/data_dumps', readWith) : null,
+  ]);
+  const result = (p: Awaited<ReturnType<typeof probe>> | null) => (!p ? null : p.ok ? { ok: true } : { ok: false, status: p.status, reason: p.reason });
   return c.json({
     data: {
-      set: true,
-      kind,
-      hint,
-      user: user.ok ? { username: user.body?.data?.username || user.body?.data?.display_name || '', plan: user.body?.data?.plan || '' } : null,
-      account: user.ok ? { ok: true } : { ok: false, status: user.status, reason: user.reason },
-      import: dumps.ok ? { ok: true } : { ok: false, status: dumps.status, reason: dumps.reason },
+      api_key: { set: !!apiKey, hint: hint(apiKey), send: result(send) },
+      oauth_token: { set: !!oauth, hint: hint(oauth) },
+      read_with: oauth ? 'WAKATIME_OAUTH_TOKEN' : apiKey ? 'WAKATIME_API_KEY' : null,
+      user: user?.ok ? { username: user.body?.data?.username || user.body?.data?.display_name || '', plan: user.body?.data?.plan || '' } : null,
+      account: result(user),
+      import: result(dumps),
     },
   });
 });
@@ -155,7 +162,7 @@ importer.post('/wakatime/check', async (c) => {
 // and won't make a new one until it expires, so the newest days are fetched this way.
 // Streamed through unparsed, like the export, to stay inside the free plan's CPU limit.
 importer.get('/wakatime/day', async (c) => {
-  if (!forwardKey(c.env)) return c.json({ error: 'WAKATIME_API_KEY is not set.' }, 400);
+  if (!importToken(c.env)) return c.json({ error: 'WAKATIME_OAUTH_TOKEN is not set.' }, 400);
   const date = c.req.query('date');
   if (!isDay(date)) return c.json({ error: 'date must be YYYY-MM-DD' }, 400);
   const res = await fetch(`${wakatime(c)}/users/current/heartbeats?date=${date}`, { headers: wakaHeaders(c) });
@@ -165,7 +172,7 @@ importer.get('/wakatime/day', async (c) => {
 
 // Editor / OS / AI model names and machine names, which the export only references by id.
 importer.get('/wakatime/lookups', async (c) => {
-  if (!forwardKey(c.env)) return c.json({ data: { user_agents: {}, machines: {} } });
+  if (!importToken(c.env)) return c.json({ data: { user_agents: {}, machines: {} } });
   const userAgents: Record<string, { editor: string; os: string; ai_model: string; value: string }> = {};
   const machines: Record<string, string> = {};
   const pages = async (path: string, each: (row: any) => void) => {

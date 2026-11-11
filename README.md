@@ -71,12 +71,12 @@ Every push to your copy of the repo redeploys automatically.
 1. **Settings → Sign-in and device keys:** set a dashboard password, so you never paste the key into a browser again.
 2. **Setup:** click **Create a key for this device**, copy the snippet into `~/.wakatime.cfg` and restart your editor (details below). Repeat on each computer.
 3. *Optional,* **your own domain:** Cloudflare → your Worker → Settings → Domains & Routes → Add → Custom domain (e.g. `waqt.example.com`).
-4. *Optional,* **keep WakaTime and import your history:** add your key from [wakatime.com/api-key](https://wakatime.com/api-key) to the Worker as a **Secret** named `WAKATIME_API_KEY` (see below), then Setup → **Import from WakaTime**.
+4. *Optional,* **keep WakaTime and import your history:** add two **Secrets** to the Worker (see below): `WAKATIME_API_KEY` from [wakatime.com/api-key](https://wakatime.com/api-key) to keep sending activity to WakaTime, and `WAKATIME_OAUTH_TOKEN` from [wakatime.com/oauth](https://wakatime.com/oauth) to import. Then Setup → **Test the WakaTime key** and **Import from WakaTime**.
 5. *Optional,* **GitHub side of your copy** (Settings → Secrets and variables → Actions on GitHub, *not* in Cloudflare):
    - weekly backups: secret `WAQT_API_KEY` (your main key) and variable `WAQT_URL` (your Waqt address);
    - updates: allow Actions to open pull requests (Settings → Actions → General → "Allow GitHub Actions to create and approve pull requests"), or set the variable `WAQT_UPDATE_MODE` to `direct`.
 
-> **Common mix-ups:** Cloudflare variables are for the Worker (`API_KEY`, `WAKATIME_API_KEY`); GitHub variables are for the workflows (`WAQT_URL`, `WAQT_UPDATE_MODE`, backups). Add keys in Cloudflare as **Secret**, not Text. The WakaTime key comes from [wakatime.com/api-key](https://wakatime.com/api-key), not the OAuth page.
+> **Common mix-ups:** Cloudflare variables are for the Worker (`API_KEY`, `WAKATIME_API_KEY`, `WAKATIME_OAUTH_TOKEN`); GitHub variables are for the workflows (`WAQT_URL`, `WAQT_UPDATE_MODE`, backups). Add keys in Cloudflare as **Secret**, not Text. WakaTime has two different credentials: the **API key** ([wakatime.com/api-key](https://wakatime.com/api-key)) only works for sending activity, the way plugins do, and the **personal OAuth token** ([wakatime.com/oauth](https://wakatime.com/oauth)) is needed to read your history.
 
 ## Connect your editors
 
@@ -99,13 +99,13 @@ The dashboard's **Setup** tab shows this snippet with your real URL filled in. C
 
 ### Keep sending to WakaTime too (optional)
 
-Your editor can only send to one server, so Waqt can forward every heartbeat to WakaTime for you. In Cloudflare open your Worker → **Settings → Variables and Secrets → Add**, choose **Secret**, name it `WAKATIME_API_KEY` and paste your key from [wakatime.com/api-key](https://wakatime.com/api-key).
+Your editor can only send to one server, so Waqt can forward every heartbeat to WakaTime for you. In Cloudflare open your Worker → **Settings → Variables and Secrets → Add**, choose **Secret**, name it `WAKATIME_API_KEY` and paste your **Secret API Key** from [wakatime.com/api-key](https://wakatime.com/api-key) (it starts with `waka_`).
 
 Waqt sends the heartbeats exactly as your editor sent them (AI fields, dependencies, user agent, machine name and time zone included), in the background, so your editor never waits on WakaTime. If WakaTime is down, batches are queued and retried for up to two weeks. The dashboard's **Setup** tab shows whether forwarding is working and lets you switch it off. To forward to another WakaTime-compatible server (Wakapi, Hackatime…) instead, also add a `WAKATIME_API_URL` variable such as `https://wakapi.dev/api`.
 
 ### Import your WakaTime history
 
-With `WAKATIME_API_KEY` set, open **Setup → Import from WakaTime**. Waqt asks WakaTime for an export of all your heartbeats, your browser counts the time (with the same code the server uses) and Waqt stores compact daily totals, including time of day, AI usage, files and branches. Only days before Waqt's first heartbeat are imported, so nothing is counted twice. WakaTime keeps an export for a while and won't make a new one until it expires, so if the export is a few days old, Waqt fetches the missing days one at a time. If the import says WakaTime refused the key, press **Test the WakaTime key**: it shows WakaTime's own reason. Importing again replaces the previous import, and **Remove imported data** undoes it. You can also upload an export file you downloaded from WakaTime yourself.
+WakaTime only lets API keys *send* activity (what plugins do); reading your history needs your **personal OAuth token**. Copy it from [wakatime.com/oauth](https://wakatime.com/oauth) and add it to the Worker as a second **Secret** named `WAKATIME_OAUTH_TOKEN`. Then open **Setup → Test the WakaTime key** (both lines should show ✓) and **Import from WakaTime**. Waqt asks WakaTime for an export of all your heartbeats, your browser counts the time (with the same code the server uses) and Waqt stores compact daily totals, including time of day, AI usage, files and branches. Only days before Waqt's first heartbeat are imported, so nothing is counted twice. WakaTime keeps an export for a while and won't make a new one until it expires, so if the export is a few days old, Waqt fetches the missing days one at a time. If the import says WakaTime refused the credential, **Test the WakaTime key** shows WakaTime's own reason. Importing again replaces the previous import, and **Remove imported data** undoes it. You can also upload an export file you downloaded from WakaTime yourself.
 
 ## Add stats to your GitHub README
 
@@ -317,7 +317,7 @@ npm run dev                      # http://localhost:8787
 Point a local `~/.wakatime.cfg` at `http://localhost:8787/api/v1` to test with a real editor.
 
 ```bash
-npm test          # 74 tests in the Workers runtime (Vitest + @cloudflare/vitest-plugin)
+npm test          # 73 tests in the Workers runtime (Vitest + @cloudflare/vitest-plugin)
 npm run typecheck
 ```
 
@@ -334,7 +334,7 @@ npm run deploy                       # applies migrations, then deploys
 
 **Does any data go to WakaTime?** Only if you turn on forwarding with the `WAKATIME_API_KEY` secret. Otherwise the plugins only talk to the `api_url` you set.
 
-**Can I import my old WakaTime history?** Yes: Setup → Import from WakaTime (needs the `WAKATIME_API_KEY` secret).
+**Can I import my old WakaTime history?** Yes: Setup → Import from WakaTime (needs the `WAKATIME_OAUTH_TOKEN` secret, your personal token from wakatime.com/oauth), or upload an export file.
 
 **Is it multi-user?** No. One instance per person keeps it simple and inside the free plan. Anyone can deploy their own with the button above.
 

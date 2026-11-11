@@ -15,6 +15,7 @@ export default defineConfig(async () => {
             API_KEY: '0f8fad5b-d9cb-469f-a165-70867728950e',
             WAKATIME_API_KEY: '',
             WAKATIME_API_URL: '',
+            WAKATIME_OAUTH_TOKEN: '',
             WAKATIME_IMPORT_URL: '',
             TELEGRAM_API_URL: '',
             WAQT_VERSION_URL: 'off',

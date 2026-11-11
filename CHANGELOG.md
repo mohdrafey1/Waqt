@@ -9,7 +9,7 @@ dashboard tells you when a new version is out.
 ### Fixed
 - Browser extensions and web-view apps (user agents starting with `Mozilla/5.0`) now show as Chrome, Safari, Firefox, Edge, Slack and so on, instead of "AppleWebKit", and imports no longer list "Mozilla" as an AI model.
 - AI model names stored before Waqt kept raw user agents are tidied, e.g. "Opus 5-5" becomes "Opus 5.5".
-- When WakaTime refuses the `WAKATIME_API_KEY` secret, Waqt now shows WakaTime's own reason, and **Setup → Test the WakaTime key** checks whether the key can sign in and read your history. OAuth access tokens are accepted too (sent as a Bearer token).
+- WakaTime now only accepts API keys from plugins, so importing needs your personal OAuth token: add it as a new optional Secret, `WAKATIME_OAUTH_TOKEN` (from wakatime.com/oauth). `WAKATIME_API_KEY` stays for forwarding. **Setup → Test the WakaTime key** checks both, and errors from WakaTime now include WakaTime's own reason.
 
 ## 1.2.0 · 2026-11-11
 

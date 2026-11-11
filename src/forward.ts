@@ -15,18 +15,33 @@ const RETRIES_PER_RUN = 10;
 
 type Headers = { ua: string; machine: string; tz: string };
 
+const clean = (v: string | undefined) => (v || '').trim().replace(/^["']|["']$/g, '');
+
+/** The credential used to send heartbeats on to WakaTime (an API key, like plugins use). */
 export function forwardKey(env: Env): string {
-  return (env.WAKATIME_API_KEY || '').trim().replace(/^["']|["']$/g, '');
+  return clean(env.WAKATIME_API_KEY);
 }
 
 /**
- * How to send the WakaTime credential: an API key ("waka_" + UUID, or a bare UUID)
+ * The credential used to read from WakaTime (import). WakaTime only accepts API keys
+ * from plugins, so reading needs the personal OAuth token from wakatime.com/oauth;
+ * without one, the API key is tried (other WakaTime-compatible servers accept it).
+ */
+export function importToken(env: Env): string {
+  return clean(env.WAKATIME_OAUTH_TOKEN) || forwardKey(env);
+}
+
+/**
+ * How to send a WakaTime credential: an API key ("waka_" + UUID, or a bare UUID)
  * goes as HTTP Basic, anything else (an OAuth access token) as a Bearer token.
  */
-export function wakatimeAuth(env: Env): string {
-  const k = forwardKey(env);
-  return /^(waka_)?[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(k) ? 'Basic ' + btoa(k) : 'Bearer ' + k;
+export function authHeader(credential: string): string {
+  return /^(waka_)?[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(credential)
+    ? 'Basic ' + btoa(credential)
+    : 'Bearer ' + credential;
 }
+
+export const wakatimeAuth = (env: Env) => authHeader(forwardKey(env));
 
 /** WakaTime's own explanation from an error response, shortened. */
 export async function wakatimeReason(res: Response): Promise<string> {
