@@ -32,6 +32,16 @@ describe('raw user agents', () => {
   });
 });
 
+describe('older heartbeats without a raw user agent', () => {
+  it('get their AI model name tidied', async () => {
+    await post('/api/v1/users/current/heartbeats.bulk', beats(3, { project: 'no-ua', endAgo: 68000 }));
+    await env.DB.prepare("UPDATE heartbeats SET user_agent_id = NULL, ai_model = 'Opus 5-5' WHERE project = 'no-ua'").run();
+    expect(await reparseUserAgents(env, await loadSettings(env.DB))).toBeGreaterThanOrEqual(3);
+    const r = await env.DB.prepare("SELECT DISTINCT ai_model FROM heartbeats WHERE project = 'no-ua'").all();
+    expect(r.results).toEqual([{ ai_model: 'Opus 5.5' }]);
+  });
+});
+
 describe('free plan usage meter', () => {
   it('counts requests and database rows', async () => {
     await post('/api/v1/users/current/heartbeats.bulk', beats(5, { project: 'usage', endAgo: 54000 }));

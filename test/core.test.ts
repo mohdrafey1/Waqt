@@ -122,3 +122,14 @@ describe('user agents', () => {
     expect(parseUserAgent('wakatime/v2 (darwin-24-arm64) go1.25 claude/2.0.14 claude-code-wakatime/1.2.0')).toMatchObject({ editor: 'Claude Code', model: '' });
   });
 });
+
+describe('browser user agents', () => {
+  it('reads browser extensions and web-view apps', () => {
+    const chrome = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36 chrome-wakatime/4.0.9';
+    expect(parseUserAgent(chrome)).toEqual({ editor: 'Chrome', os: 'macOS', model: '' });
+    expect(parseUserAgent('Mozilla/5.0 (X11; Linux x86_64; rv:132.0) Gecko/20100101 Firefox/132.0').editor).toBe('Firefox');
+    expect(parseUserAgent('Mozilla/5.0 (Windows NT 10.0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131 Safari/537.36 Edg/131.0')).toEqual({ editor: 'Edge', os: 'Windows', model: '' });
+    expect(parseUserAgent('Mozilla/5.0 (Macintosh) AppleWebKit/537.36 (KHTML, like Gecko) Slack/4.41.105 Chrome/130 Electron/33 Safari/537.36').editor).toBe('Slack');
+    expect(parseUserAgent('Mozilla/5.0 (Macintosh) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.1 Safari/605.1.15').editor).toBe('Safari');
+  });
+});

@@ -1,6 +1,6 @@
 {
   "name": "waqt",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Free, self-hosted coding time tracker. Works with every WakaTime editor plugin and runs on Cloudflare's free plan.",
   "license": "MIT",
   "private": true,

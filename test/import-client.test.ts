@@ -51,4 +51,24 @@ describe('importing in the browser', () => {
     expect(r.filled_days).toBeGreaterThan(5);
     expect(r.missing_days).toEqual(['2026-01-17']);
   });
+
+  it("doesn't take a browser's \"Mozilla\" for an AI model", async () => {
+    const browserUa = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0 Safari/537.36 chrome-wakatime/4.0';
+    const hb = session('2026-01-10T09:00:00Z', 6, 'web').map((h) => ({ ...h, category: 'ai coding', user_agent_id: 'b1' }));
+    const uploaded: any[] = [];
+    const api = async (path: string, opts: any = {}) => {
+      if (path === '/users/current/import/status') return { data: { wakatime_key: false, own_since: t('2026-01-11T00:00:00Z'), timezone: 'UTC', timeout_minutes: 15 } };
+      if (path === '/users/current/import/wakatime/lookups')
+        return { data: { user_agents: { b1: { value: browserUa, editor: 'AppleWebKit', os: 'Mac', ai_model: 'Mozilla' } }, machines: {} } };
+      if (path === '/users/current/import/days') {
+        uploaded.push(...JSON.parse(opts.body).days);
+        return { data: { stored: 1 } };
+      }
+      return { data: {} };
+    };
+    await runImport({ api, file: new File([JSON.stringify({ days: [{ heartbeats: hb }] })], 'x.json'), onStatus: () => {} });
+    expect(uploaded[0].rows[0][2]).toBe('Chrome');
+    expect(uploaded[0].rows[0][3]).toBe('macOS');
+    expect(uploaded[0].ai.map((a: any[]) => a[0])).toEqual(['']);
+  });
 });

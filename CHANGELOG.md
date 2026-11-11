@@ -4,6 +4,12 @@ Every Waqt release, newest first. Deployed copies pick these up through the
 **Update Waqt** workflow (Actions → Update Waqt → Run workflow), and the
 dashboard tells you when a new version is out.
 
+## 1.2.1 · 2026-11-11
+
+### Fixed
+- Browser extensions and web-view apps (user agents starting with `Mozilla/5.0`) now show as Chrome, Safari, Firefox, Edge, Slack and so on, instead of "AppleWebKit", and imports no longer list "Mozilla" as an AI model.
+- AI model names stored before Waqt kept raw user agents are tidied, e.g. "Opus 5-5" becomes "Opus 5.5".
+
 ## 1.2.0 · 2026-11-11
 
 ### New

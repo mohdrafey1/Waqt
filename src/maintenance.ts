@@ -2,7 +2,7 @@
 
 import { Env, Settings, saveSettings } from './settings';
 import { markAllRawDaysDirty } from './summaries';
-import { PARSER_VERSION, parseUserAgent } from './useragent';
+import { PARSER_VERSION, normalizeModelName, parseUserAgent } from './useragent';
 
 /**
  * Re-parse every stored user agent and fix heartbeats whose editor, OS or AI model
@@ -21,6 +21,19 @@ export async function reparseUserAgents(env: Env, s: Settings): Promise<number> 
       ).bind(u.id, p.editor, p.os, p.model);
     });
     const out = await env.DB.batch(stmts);
+    changed += out.reduce((a, r) => a + (r.meta?.changes || 0), 0);
+  }
+  // Heartbeats from before raw user agents were kept: tidy the stored model name.
+  const { results: models } = await env.DB.prepare(
+    "SELECT DISTINCT ai_model FROM heartbeats WHERE user_agent_id IS NULL AND ai_model != ''",
+  ).all<{ ai_model: string }>();
+  const fixes = models.filter((m) => normalizeModelName(m.ai_model) !== m.ai_model);
+  if (fixes.length) {
+    const out = await env.DB.batch(
+      fixes.map((m) =>
+        env.DB.prepare('UPDATE heartbeats SET ai_model = ?2 WHERE user_agent_id IS NULL AND ai_model = ?1').bind(m.ai_model, normalizeModelName(m.ai_model)),
+      ),
+    );
     changed += out.reduce((a, r) => a + (r.meta?.changes || 0), 0);
   }
   if (changed) await markAllRawDaysDirty(env, s);

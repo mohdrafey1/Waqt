@@ -5,7 +5,7 @@
  * Bump this whenever the rules below change: the Worker then re-reads every stored
  * heartbeat's user agent and rebuilds the totals that changed.
  */
-export const PARSER_VERSION = 2;
+export const PARSER_VERSION = 3;
 
 export const OS_NAMES = {
   darwin: 'macOS',
@@ -122,6 +122,15 @@ export function isModelName(name) {
   return !!name && MODEL_FAMILIES.has(String(name).split(/[\s/]/)[0].toLowerCase());
 }
 
+/**
+ * Tidy a model name stored by an older version, e.g. "Opus 5-5" → "Opus 5.5".
+ * Used for heartbeats received before Waqt kept raw user agents.
+ */
+export function normalizeModelName(name) {
+  if (!name) return '';
+  return String(name).replace(/^([A-Za-z]+) (\d+)-(\d+)(?=$|-)/, '$1 $2.$3');
+}
+
 export function prettyModelToken(token) {
   if (!token) return '';
   const [family, raw = ''] = token.split('/');
@@ -132,9 +141,46 @@ export function prettyModelToken(token) {
   return version ? `${fam} ${version}` : fam;
 }
 
+// Parts of a web browser's user agent that never name the app.
+const BROWSER_NOISE = new Set(['mozilla', 'applewebkit', 'khtml', 'like', 'gecko', 'version', 'mobile', 'safari', 'chrome', 'electron', 'firefox', 'edg', 'opr']);
+
+/**
+ * Browser extensions and desktop apps built on web views send a browser's user agent,
+ * e.g. "Mozilla/5.0 (Macintosh; …) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131 Safari/537.36 chrome-wakatime/4.0".
+ * @returns {{ editor: string, os: string, model: string }}
+ */
+function parseBrowserAgent(ua) {
+  const sys = (ua.match(/\(([^)]*)\)/) || [])[1] || '';
+  const os = /iPhone|iPad|iOS/.test(sys)
+    ? 'iOS'
+    : /Android/.test(sys)
+      ? 'Android'
+      : /CrOS/.test(sys)
+        ? 'ChromeOS'
+        : /Mac/.test(sys)
+          ? 'macOS'
+          : /Windows/.test(sys)
+            ? 'Windows'
+            : /Linux|X11/.test(sys)
+              ? 'Linux'
+              : '';
+  const names = [...ua.matchAll(/([A-Za-z][\w.-]*)\/[\w.]+/g)].map((m) => m[1]);
+  // 1. The WakaTime plugin says which browser or app it is ("firefox-wakatime/4.0").
+  const plugin = names.find((n) => /-wakatime$/i.test(n));
+  if (plugin) return { editor: prettyEditor(plugin), os, model: '' };
+  // 2. A known app built on a web view ("Slack/4.41", "Obsidian/1.7").
+  const app = names.find((n) => !BROWSER_NOISE.has(n.toLowerCase()) && EDITOR_NAMES[n.toLowerCase().replace(/[\s.]/g, '')]);
+  if (app) return { editor: prettyEditor(app), os, model: '' };
+  // 3. The browser itself.
+  const has = (n) => names.some((x) => x.toLowerCase() === n);
+  const editor = has('edg') ? 'Edge' : has('opr') ? 'Opera' : has('firefox') ? 'Firefox' : has('chrome') ? 'Chrome' : has('safari') ? 'Safari' : 'Browser';
+  return { editor, os, model: '' };
+}
+
 /** @returns {{ editor: string, os: string, model: string }} */
 export function parseUserAgent(ua) {
   if (!ua) return { editor: '', os: '', model: '' };
+  if (/^Mozilla\//i.test(ua.trim())) return parseBrowserAgent(ua.trim());
   let os = '';
   const osMatch = ua.match(/\(([a-z0-9]+)[-)]/i);
   if (osMatch) os = OS_NAMES[osMatch[1].toLowerCase()] || osMatch[1];

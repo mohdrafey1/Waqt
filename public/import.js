@@ -2,7 +2,7 @@
 // count time with the same code the server uses, and upload compact daily totals.
 
 import { addDays, dayOf, dayStart, summarizeDay } from '/lib/core.js';
-import { isModelName, parseUserAgent } from '/lib/useragent.js';
+import { isModelName, normalizeModelName, parseUserAgent } from '/lib/useragent.js';
 
 const OS_NAMES = { mac: 'macOS', macos: 'macOS', darwin: 'macOS', windows: 'Windows', linux: 'Linux' };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -16,7 +16,9 @@ function agent(ua) {
     const parsed = parseUserAgent(ua.value || '');
     const editor = parsed.editor || (isModelName(ua.editor) ? '' : ua.editor || '');
     const os = parsed.os || OS_NAMES[(ua.os || '').toLowerCase()] || ua.os || '';
-    const model = parsed.model || ua.ai_model || (isModelName(ua.editor) ? ua.editor : '');
+    // WakaTime reads the first word of a browser's user agent ("Mozilla") as an AI model.
+    const browser = /^Mozilla\//i.test(ua.value || '');
+    const model = parsed.model || (browser && !isModelName(ua.ai_model) ? '' : normalizeModelName(ua.ai_model || '')) || (isModelName(ua.editor) ? ua.editor : '');
     uaCache.set(ua.value, { editor, os, model });
   }
   return uaCache.get(ua.value);

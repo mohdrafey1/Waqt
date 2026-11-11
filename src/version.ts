@@ -3,7 +3,7 @@
 
 import { Env, Settings, saveSettings } from './settings';
 
-export const VERSION = '1.2.0';
+export const VERSION = '1.2.1';
 export const UPSTREAM = 'mohdrafey1/waqt';
 const DEFAULT_URL = `https://raw.githubusercontent.com/${UPSTREAM}/main/package.json`;
 
