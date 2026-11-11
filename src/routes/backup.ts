@@ -44,6 +44,9 @@ const NOT_BACKED_UP = new Set([
   'dashboard_password',
   'latest_version',
   'latest_checked',
+  'last_goal_nudge',
+  'last_week_goal_nudge',
+  'last_streak_nudge',
 ]);
 
 export const backup = new Hono<AppEnv>();

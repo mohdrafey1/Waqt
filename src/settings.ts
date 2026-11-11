@@ -42,6 +42,13 @@ export interface Settings {
   ai_prices: Price[]; // USD per million tokens, see pricing.ts
   ai_prices_custom: boolean;
   ai_cost_public: boolean; // show the AI cost estimate on the public profile and README
+  nudge_goal: boolean; // message when a daily/weekly goal is reached
+  nudge_streak: boolean; // message when the streak is about to end
+  nudge_streak_hour: number; // local hour for the streak reminder
+  last_goal_nudge: string;
+  last_week_goal_nudge: string;
+  last_streak_nudge: string;
+  statusbar_goal: boolean; // show daily goal progress in the editor status bar
 }
 
 export const DEFAULTS: Record<string, string> = {
@@ -74,6 +81,13 @@ export const DEFAULTS: Record<string, string> = {
   parser_version: '0',
   ai_prices: '',
   ai_cost_public: '0',
+  nudge_goal: '0',
+  nudge_streak: '0',
+  nudge_streak_hour: '21',
+  last_goal_nudge: '',
+  last_week_goal_nudge: '',
+  last_streak_nudge: '',
+  statusbar_goal: '0',
 };
 
 function obj<T>(json: string, check: (v: unknown) => v is T): Record<string, T> {
@@ -128,6 +142,13 @@ function parse(raw: Record<string, string>): Settings {
     ai_prices: parsePrices(v.ai_prices),
     ai_prices_custom: !!v.ai_prices,
     ai_cost_public: v.ai_cost_public === '1',
+    nudge_goal: v.nudge_goal === '1',
+    nudge_streak: v.nudge_streak === '1',
+    nudge_streak_hour: clampInt(v.nudge_streak_hour, 0, 23, 21),
+    last_goal_nudge: v.last_goal_nudge,
+    last_week_goal_nudge: v.last_week_goal_nudge,
+    last_streak_nudge: v.last_streak_nudge,
+    statusbar_goal: v.statusbar_goal === '1',
   };
 }
 
@@ -189,6 +210,10 @@ export function publicSettingsView(s: Settings) {
     ai_prices: s.ai_prices,
     ai_prices_custom: s.ai_prices_custom,
     ai_cost_public: s.ai_cost_public,
+    nudge_goal: s.nudge_goal,
+    nudge_streak: s.nudge_streak,
+    nudge_streak_hour: s.nudge_streak_hour,
+    statusbar_goal: s.statusbar_goal,
   };
 }
 

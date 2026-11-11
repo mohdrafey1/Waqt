@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { retryForwardQueue } from './forward';
 import { maybeSendWeekly } from './report';
+import { maybeNudge } from './nudges';
 import { type AppEnv, configuredKey } from './http';
 import { reparseUserAgents } from './maintenance';
 import { countRequest, flushUsage, trackDb } from './usage';
@@ -53,6 +54,7 @@ export default {
         await pruneRaw(env, s);
         await retryForwardQueue(env, s);
         await maybeSendWeekly(env, s);
+        await maybeNudge(env, s).catch((e) => console.error('nudge failed', e));
         await flushUsage(rawEnv.DB, true);
       })(),
     );

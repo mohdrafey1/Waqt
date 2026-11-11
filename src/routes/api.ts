@@ -63,6 +63,14 @@ api.get('/users/current/statusbar/today', requireAuth, async (c) => {
   const st = await getStats(c.env, s, { range: 'today', view: 'private' });
   if (!st) return c.json({ error: 'bad range' }, 400);
   const startTs = dayStart(today, tz);
+  // Goal progress in the status bar. The CLI only shows grand_total.text when there
+  // are fewer than 2 categories, so they're folded into one.
+  const goal = s.statusbar_goal && s.goal_daily_minutes ? s.goal_daily_minutes * 60 : 0;
+  let text = durationText(st.total_seconds);
+  if (goal) {
+    text += st.total_seconds >= goal ? ' · goal ✓' : ` · ${Math.floor((st.total_seconds / goal) * 100)}% of ${durationText(goal)}`;
+  }
+  const categories = goal ? [{ name: 'Coding', total_seconds: st.total_seconds, percent: 100, text, digital: '', hours: 0, minutes: 0 }] : st.categories;
   return c.json({
     cached_at: new Date().toISOString(),
     data: {
@@ -71,10 +79,10 @@ api.get('/users/current/statusbar/today', requireAuth, async (c) => {
         digital: `${Math.floor(st.total_seconds / 3600)}:${String(Math.floor((st.total_seconds % 3600) / 60)).padStart(2, '0')}`,
         hours: Math.floor(st.total_seconds / 3600),
         minutes: Math.floor((st.total_seconds % 3600) / 60),
-        text: durationText(st.total_seconds),
+        text,
         total_seconds: st.total_seconds,
       },
-      categories: st.categories,
+      categories,
       dependencies: [],
       editors: st.editors,
       languages: st.languages,
@@ -475,6 +483,12 @@ api.put('/users/current/settings', requireAuth, async (c) => {
     }
   }
   if ('ai_cost_public' in body) out.ai_cost_public = body.ai_cost_public ? '1' : '0';
+  for (const k of ['nudge_goal', 'nudge_streak', 'statusbar_goal'] as const) if (k in body) out[k] = body[k] ? '1' : '0';
+  if ('nudge_streak_hour' in body) {
+    const n = Math.trunc(Number(body.nudge_streak_hour));
+    if (n >= 0 && n <= 23) out.nudge_streak_hour = String(n);
+    else errors.push('nudge_streak_hour must be 0–23');
+  }
   if ('report_enabled' in body) out.report_enabled = body.report_enabled ? '1' : '0';
   // Secrets: undefined = keep as is, '' = remove, otherwise replace.
   if (typeof body.report_discord === 'string') {

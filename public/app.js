@@ -852,6 +852,13 @@ function renderSettings() {
   if (!$('#s-goal-day').value) $('#s-goal-day').value = '0';
   $('#s-goal-week').value = settings.goal_weekly_hours || '';
   $('#s-report').checked = settings.report_enabled;
+  $('#s-statusbar-goal').checked = !!settings.statusbar_goal;
+  $('#s-nudge-goal').checked = !!settings.nudge_goal;
+  $('#s-nudge-streak').checked = !!settings.nudge_streak;
+  if (!$('#s-nudge-hour').options.length) {
+    $('#s-nudge-hour').innerHTML = Array.from({ length: 24 }, (_, h) => `<option value="${h}">${String(h).padStart(2, '0')}:00</option>`).join('');
+  }
+  $('#s-nudge-hour').value = String(settings.nudge_streak_hour ?? 21);
   $('#s-discord').value = '';
   $('#s-discord').placeholder = settings.report_discord_set ? 'Saved (type a new URL to replace, or clear below)' : 'https://discord.com/api/webhooks/…';
   $('#s-tg-token').value = '';
@@ -876,6 +883,10 @@ async function saveSettingsForm() {
       goal_daily_minutes: Number($('#s-goal-day').value),
       goal_weekly_hours: Number($('#s-goal-week').value || 0),
       report_enabled: $('#s-report').checked,
+      statusbar_goal: $('#s-statusbar-goal').checked,
+      nudge_goal: $('#s-nudge-goal').checked,
+      nudge_streak: $('#s-nudge-streak').checked,
+      nudge_streak_hour: Number($('#s-nudge-hour').value),
       report_telegram_chat: $('#s-tg-chat').value.trim(),
     };
     // Only send secrets when typed, so saved ones aren't wiped.

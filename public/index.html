@@ -384,10 +384,13 @@
               <select id="s-goal-day" style="width:100%"><option value="0">Off</option><option value="30">30 mins</option><option value="60">1 hour</option><option value="90">1.5 hours</option><option value="120">2 hours</option><option value="180">3 hours</option><option value="240">4 hours</option><option value="300">5 hours</option><option value="360">6 hours</option><option value="480">8 hours</option></select></div>
             <div class="field"><label for="s-goal-week">Weekly goal (hours)</label><input id="s-goal-week" type="number" min="0" max="168" placeholder="0 = off"></div>
           </div>
+          <label class="check"><input type="checkbox" id="s-statusbar-goal"><span><b>Show daily goal progress in my editor</b><br><span class="muted">The status bar shows e.g. <code>1 hr 20 mins · 67% of 2 hrs</code>, then <code>goal ✓</code>.</span></span></label>
 
-          <h3 class="form-h">Weekly report</h3>
-          <p class="hint" style="margin:-6px 0 12px">Every Monday at 9:00 your time: last week's total, goals, top languages and projects, AI use and streak.</p>
+          <h3 class="form-h">Reports and reminders</h3>
+          <p class="hint" style="margin:-6px 0 12px">Sent to Discord and/or Telegram. The weekly report arrives every Monday at 9:00 your time: last week's total, goals, top languages and projects, AI use and streak.</p>
           <label class="check"><input type="checkbox" id="s-report"><span><b>Send me a weekly report</b></span></label>
+          <label class="check"><input type="checkbox" id="s-nudge-goal"><span><b>Tell me when I reach my daily or weekly goal</b></span></label>
+          <label class="check"><input type="checkbox" id="s-nudge-streak"><span><b>Remind me when my streak is about to end</b><br><span class="muted">If you haven't coded yet today by <select id="s-nudge-hour" style="padding:2px 6px"></select> and have a streak of 2 days or more.</span></span></label>
           <div class="field"><label for="s-discord">Discord webhook URL</label><input id="s-discord" type="password" autocomplete="off" placeholder="https://discord.com/api/webhooks/…"><span class="hint">In Discord: Server settings → Integrations → Webhooks → New webhook → Copy URL.</span></div>
           <div class="grid two" style="gap:0 16px">
             <div class="field"><label for="s-tg-token">Telegram bot token</label><input id="s-tg-token" type="password" autocomplete="off" placeholder="123456789:ABC…"><span class="hint">Create a bot with @BotFather, then send it any message.</span></div>
