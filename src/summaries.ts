@@ -1,22 +1,10 @@
 import { Env, Settings, tzOf } from './settings';
+import { summarizeDay, type Beat, type DaySummary } from '../public/lib/core.js';
 import { addDays, dayStart, dayOf, todayIn } from './time';
 
-interface HbRow {
-  time: number;
-  project: string;
-  language: string;
-  editor: string;
-  os: string;
-  machine: string;
-  category: string;
-  ai: number | null;
-  hu: number | null;
-}
-
 /**
- * Turn a day's heartbeats into time. Each heartbeat is credited with the gap
- * until the next one, as long as that gap is under the timeout (default 15 min),
- * the same way WakaTime counts time.
+ * Rebuild one day's live totals from its raw heartbeats (see public/lib/core.js
+ * for how time is counted). Imported history for the day is left alone.
  */
 export async function recomputeDay(env: Env, s: Settings, day: string, markedAt: number): Promise<void> {
   const tz = tzOf(s);
@@ -31,47 +19,47 @@ export async function recomputeDay(env: Env, s: Settings, day: string, markedAt:
   const end = dayStart(addDays(day, 1), tz);
   const timeout = s.timeout_minutes * 60;
   const { results } = await env.DB.prepare(
-    `SELECT time, project, language, editor, os, machine, category,
-            ai_line_changes AS ai, human_line_changes AS hu
+    `SELECT time, project, language, editor, os, machine, category, ai_model, ai_session,
+            ai_input_tokens, ai_output_tokens, ai_cached_tokens, ai_prompt_length,
+            ai_line_changes, human_line_changes
      FROM heartbeats WHERE time >= ?1 AND time < ?2 ORDER BY time`,
   )
     .bind(start, end + timeout)
-    .all<HbRow>();
+    .all<Beat>();
 
-  const agg = new Map<string, [string, string, string, string, string, string, number, number, number]>();
-  for (let i = 0; i < results.length; i++) {
-    const h = results[i];
-    if (h.time >= end) break;
-    const next = results[i + 1];
-    let credit = 0;
-    if (next && next.time - h.time <= timeout) credit = Math.min(next.time, end) - h.time;
-    const key = `${h.project}\u0000${h.language}\u0000${h.editor}\u0000${h.os}\u0000${h.machine}\u0000${h.category}`;
-    let row = agg.get(key);
-    if (!row) {
-      row = [h.project, h.language, h.editor, h.os, h.machine, h.category, 0, 0, 0];
-      agg.set(key, row);
-    }
-    row[6] += credit;
-    row[7] += h.ai || 0;
-    row[8] += h.hu || 0;
-  }
-  const rows = [...agg.values()].filter((r) => r[6] > 0 || r[7] || r[8]).map((r) => {
-    r[6] = Math.round(r[6] * 1000) / 1000;
-    return r;
-  });
-
+  const sum = summarizeDay(results, start, end, timeout);
   await env.DB.batch([
-    env.DB.prepare('DELETE FROM daily_summaries WHERE day = ?1').bind(day),
-    env.DB.prepare(
-      `INSERT INTO daily_summaries (day, project, language, editor, os, machine, category, seconds, ai_lines, human_lines)
-       SELECT ?1, json_extract(value, '$[0]'), json_extract(value, '$[1]'), json_extract(value, '$[2]'),
-              json_extract(value, '$[3]'), json_extract(value, '$[4]'), json_extract(value, '$[5]'),
-              json_extract(value, '$[6]'), json_extract(value, '$[7]'), json_extract(value, '$[8]')
-       FROM json_each(?2)`,
-    ).bind(day, JSON.stringify(rows)),
+    ...replaceDayStatements(env.DB, day, 'live', sum),
     // Only clear the flag if no newer heartbeat re-marked the day while we worked.
     env.DB.prepare('DELETE FROM dirty_days WHERE day = ?1 AND marked_at <= ?2').bind(day, markedAt),
   ]);
+}
+
+/** Statements that replace one day's totals from one source ('live' or 'import'). */
+export function replaceDayStatements(db: D1Database, day: string, source: string, sum: DaySummary): D1PreparedStatement[] {
+  return [
+    db.prepare('DELETE FROM daily_summaries WHERE day = ?1 AND source = ?2').bind(day, source),
+    db.prepare('DELETE FROM daily_hours WHERE day = ?1 AND source = ?2').bind(day, source),
+    db.prepare('DELETE FROM daily_ai WHERE day = ?1 AND source = ?2').bind(day, source),
+    db.prepare(
+      `INSERT INTO daily_summaries (day, source, project, language, editor, os, machine, category, seconds, ai_lines, human_lines)
+       SELECT ?1, ?2, json_extract(value, '$[0]'), json_extract(value, '$[1]'), json_extract(value, '$[2]'),
+              json_extract(value, '$[3]'), json_extract(value, '$[4]'), json_extract(value, '$[5]'),
+              json_extract(value, '$[6]'), json_extract(value, '$[7]'), json_extract(value, '$[8]')
+       FROM json_each(?3)`,
+    ).bind(day, source, JSON.stringify(sum.rows)),
+    db.prepare(
+      `INSERT INTO daily_hours (day, source, hour, seconds)
+       SELECT ?1, ?2, json_extract(value, '$[0]'), json_extract(value, '$[1]') FROM json_each(?3)`,
+    ).bind(day, source, JSON.stringify(sum.hours)),
+    db.prepare(
+      `INSERT INTO daily_ai (day, source, model, seconds, sessions, prompts, input_tokens, output_tokens, cached_tokens, ai_lines)
+       SELECT ?1, ?2, json_extract(value, '$[0]'), json_extract(value, '$[1]'), json_extract(value, '$[2]'),
+              json_extract(value, '$[3]'), json_extract(value, '$[4]'), json_extract(value, '$[5]'),
+              json_extract(value, '$[6]'), json_extract(value, '$[7]')
+       FROM json_each(?3)`,
+    ).bind(day, source, JSON.stringify(sum.ai)),
+  ];
 }
 
 /** Recalculate up to `max` days that changed, newest first. Returns how many were done. */
@@ -133,7 +121,7 @@ export async function pruneRaw(env: Env, s: Settings): Promise<void> {
 
   // Make sure every old day has its summary before the raw data goes.
   const { results: pending } = await env.DB.prepare(
-    'SELECT day, marked_at FROM dirty_days WHERE day < ?1 ORDER BY day LIMIT 10',
+    'SELECT day, marked_at FROM dirty_days WHERE day < ?1 ORDER BY day LIMIT 5',
   )
     .bind(cutoffDay)
     .all<{ day: string; marked_at: number }>();

@@ -1,9 +1,10 @@
 import { Hono } from 'hono';
+import { retryForwardQueue } from './forward';
 import { type AppEnv, configuredKey } from './http';
 import { badges, cards } from './routes/cards';
 import { api } from './routes/api';
-import { Env, loadSettings } from './settings';
-import { flushDirty, pruneRaw } from './summaries';
+import { Env, loadSettings, saveSettings } from './settings';
+import { flushDirty, markAllRawDaysDirty, pruneRaw } from './summaries';
 
 const app = new Hono<AppEnv>();
 
@@ -27,8 +28,14 @@ export default {
     ctx.waitUntil(
       (async () => {
         const s = await loadSettings(env.DB);
-        await flushDirty(env, s, 10);
+        if (s.needs_rebuild) {
+          // After an upgrade that adds new kinds of totals, rebuild days we still have raw data for.
+          await markAllRawDaysDirty(env, s);
+          await saveSettings(env.DB, { needs_rebuild: '0' });
+        }
+        await flushDirty(env, s, 5);
         await pruneRaw(env, s);
+        await retryForwardQueue(env, s);
       })(),
     );
   },

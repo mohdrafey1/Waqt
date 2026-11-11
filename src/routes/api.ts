@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { type C, type AppEnv, cors, requireAuth, viewFor, withSettings } from '../http';
-import { forwardHeartbeats, forwardHost, forwardingEnabled } from '../forward';
+import { forwardHeartbeats, forwardHost, forwardKey, forwardQueueSize, forwardingEnabled } from '../forward';
 import { MAX_BATCH, ingest } from '../ingest';
 import { loadSettings, publicSettingsView, saveSettings, tzOf } from '../settings';
 import { clearCache, getStats } from '../stats';
@@ -36,7 +36,7 @@ async function handleHeartbeats(c: C) {
   const s = c.get('settings');
   const result = await ingest(c.env, s, items, headers);
   // Pass the original heartbeats on to WakaTime in the background, if enabled.
-  if (forwardingEnabled(c.env)) c.executionCtx.waitUntil(forwardHeartbeats(c.env, s, items, headers));
+  if (forwardingEnabled(c.env, s)) c.executionCtx.waitUntil(forwardHeartbeats(c.env, s, items, headers));
   if (!Array.isArray(body)) {
     const [data, status] = result.responses[0];
     return c.json(data as object, status === 201 ? 201 : 400);
@@ -233,7 +233,9 @@ api.get('/users/current/settings', requireAuth, async (c) => {
       ...publicSettingsView(s),
       effective_timezone: tzOf(s),
       stats: counts,
-      forwarding: forwardingEnabled(c.env) ? { to: forwardHost(c.env), error: s.forward_error } : null,
+      forwarding: forwardKey(c.env)
+        ? { to: forwardHost(c.env), enabled: s.forward_enabled, error: s.forward_error, queued: await forwardQueueSize(c.env) }
+        : null,
     },
   });
 });
@@ -260,6 +262,7 @@ api.put('/users/current/settings', requireAuth, async (c) => {
   if ('display_name' in body) out.display_name = String(body.display_name || '').slice(0, 60);
   if ('public_enabled' in body) out.public_enabled = body.public_enabled ? '1' : '0';
   if ('public_projects' in body) out.public_projects = body.public_projects ? '1' : '0';
+  if ('forward_enabled' in body) out.forward_enabled = body.forward_enabled ? '1' : '0';
   if ('hidden_projects' in body) {
     const list = Array.isArray(body.hidden_projects) ? body.hidden_projects : [];
     out.hidden_projects = JSON.stringify(list.map((x) => String(x).trim().slice(0, 200)).filter(Boolean).slice(0, 200));

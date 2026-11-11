@@ -86,8 +86,30 @@ function prettyEditor(raw: string): string {
   return raw.replace(/-wakatime$/i, '').replace(/^./, (c) => c.toUpperCase()).slice(0, 40);
 }
 
-export function parseUserAgent(ua: string): { editor: string; os: string } {
-  if (!ua) return { editor: '', os: '' };
+// The CLI puts the AI model first for AI activity, e.g. "opus/4.1-medium claude/2.0 ...".
+// ("claude/..." itself is the Claude Code editor, never a model: the CLI drops that prefix.)
+const MODEL_FAMILIES = new Set([
+  'opus', 'sonnet', 'haiku', 'fable', 'mythos', 'gpt', 'o', 'gemini', 'gemma', 'qwen', 'deepseek',
+  'llama', 'mistral', 'codestral', 'devstral', 'grok', 'kimi', 'glm', 'minimax', 'phi', 'nova', 'composer',
+]);
+
+function modelToken(token: string | undefined): string {
+  if (!token) return '';
+  const [name, version] = token.split('/');
+  if (!version || !/^\d/.test(version)) return '';
+  return MODEL_FAMILIES.has(name.toLowerCase()) ? token : '';
+}
+
+export function prettyModelToken(token: string): string {
+  if (!token) return '';
+  const [family, version = ''] = token.split('/');
+  const special: Record<string, string> = { gpt: 'GPT', o: 'o', glm: 'GLM' };
+  const fam = special[family.toLowerCase()] ?? family.charAt(0).toUpperCase() + family.slice(1);
+  return version ? `${fam} ${version}` : fam;
+}
+
+export function parseUserAgent(ua: string): { editor: string; os: string; model: string } {
+  if (!ua) return { editor: '', os: '', model: '' };
   let os = '';
   const osMatch = ua.match(/\(([a-z0-9]+)[-)]/i);
   if (osMatch) os = OS_NAMES[osMatch[1].toLowerCase()] || osMatch[1];
@@ -95,6 +117,8 @@ export function parseUserAgent(ua: string): { editor: string; os: string } {
   // Tokens after the "(...)" block: [goVersion, editor/version, plugin/version, ...]
   const after = ua.includes(')') ? ua.slice(ua.indexOf(')') + 1) : ua;
   const tokens = after.trim().split(/\s+/).filter((t) => t && !/^go\d/.test(t) && !/^wakatime\//.test(t));
+  const model = modelToken(tokens[0]);
+  if (model) tokens.shift();
   let editor = '';
   if (tokens.length > 0) {
     const first = tokens[0].split('/')[0];
@@ -102,5 +126,5 @@ export function parseUserAgent(ua: string): { editor: string; os: string } {
     // Plugins that send only "name-wakatime/x" (no separate editor token)
     if (!editor && tokens[1]) editor = prettyEditor(tokens[1].split('/')[0]);
   }
-  return { editor, os };
+  return { editor, os, model: prettyModelToken(model) };
 }
