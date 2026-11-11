@@ -69,6 +69,7 @@ function showTab(name) {
   history.replaceState(null, '', name === 'overview' ? '#' : '#' + name);
   if (name === 'share') renderShare();
   if (name === 'projects') renderProjects();
+  if (name === 'timesheets') loadTimesheet();
   if (name === 'setup') {
     renderSetup();
     renderImport();
@@ -220,6 +221,176 @@ $('#proj-save').onclick = async () => {
   } catch (e) {
     $('#proj-err').textContent = e.message;
   }
+};
+
+// ---------- timesheets ----------
+let ts = null; // last loaded timesheet data
+const localToday = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+function presetRange(p) {
+  const today = localToday();
+  const wd = new Date(today + 'T00:00:00Z').getUTCDay();
+  const monday = addDays(today, -((wd + 6) % 7));
+  const first = today.slice(0, 8) + '01';
+  if (p === 'this_week') return [monday, today];
+  if (p === 'last_week') return [addDays(monday, -7), addDays(monday, -1)];
+  if (p === 'last_month') {
+    const lastOfPrev = addDays(first, -1);
+    return [lastOfPrev.slice(0, 8) + '01', lastOfPrev];
+  }
+  if (p === 'custom') return [$('#ts-start').value || first, $('#ts-end').value || today];
+  return [first, today];
+}
+const money = (n) => {
+  try {
+    return new Intl.NumberFormat(undefined, { style: 'currency', currency: $('#ts-currency').value }).format(n);
+  } catch {
+    return n.toFixed(2);
+  }
+};
+function roundedHours(seconds) {
+  const step = Number($('#ts-round').value) * 60;
+  const s = step ? Math.ceil(seconds / step) * step : seconds;
+  return s / 3600;
+}
+function groups() {
+  // Rounding is applied per day and project, like most timesheet tools.
+  const byGroup = new Map();
+  for (const r of ts.rows) {
+    const label = r.label || 'No label';
+    const g = $('#ts-group').value === 'label' ? label : r.project;
+    if (!byGroup.has(g)) byGroup.set(g, { name: g, label, projects: new Map(), hours: 0 });
+    const grp = byGroup.get(g);
+    const h = roundedHours(r.seconds);
+    grp.hours += h;
+    grp.projects.set(r.project, (grp.projects.get(r.project) || 0) + h);
+  }
+  return [...byGroup.values()].sort((a, b) => b.hours - a.hours);
+}
+function rateFor(label) {
+  const input = document.querySelector(`#ts-table input[data-label="${CSS.escape(label)}"]`);
+  if (input && input.value !== '') return Number(input.value) || 0;
+  return (ts.rates || {})[label] || 0;
+}
+async function loadTimesheet() {
+  $('#ts-currency').value = settings.currency || 'USD';
+  const [start, end] = presetRange($('#ts-preset').value);
+  $('#ts-start').value = start;
+  $('#ts-end').value = end;
+  $('#ts-range-text').textContent = `${prettyDate(start, { month: 'short', day: 'numeric', year: 'numeric' })} – ${prettyDate(end, { month: 'short', day: 'numeric', year: 'numeric' })}`;
+  try {
+    ts = (await api(`/users/current/timesheet?start=${start}&end=${end}`)).data;
+  } catch (e) {
+    $('#ts-table tbody').innerHTML = `<tr><td colspan="4" class="empty">${esc(e.message)}</td></tr>`;
+    return;
+  }
+  drawTimesheet();
+}
+function drawTimesheet() {
+  const byLabel = $('#ts-group').value === 'label';
+  const gs = groups();
+  let total = 0;
+  let totalHours = 0;
+  const body = gs
+    .map((g) => {
+      const rate = rateFor(g.label);
+      const amount = g.hours * rate;
+      total += amount;
+      totalHours += g.hours;
+      const head = `<tr><td><b>${esc(g.name)}</b></td><td class="num"><b>${g.hours.toFixed(2)}</b></td>
+        <td class="num">${byLabel && g.label !== 'No label' ? `<input type="number" min="0" step="0.01" data-label="${esc(g.label)}" value="${(ts.rates || {})[g.label] ?? ''}" placeholder="0" style="width:110px;text-align:right">` : rate ? money(rate) : '—'}</td>
+        <td class="num"><b>${amount ? money(amount) : '—'}</b></td></tr>`;
+      const sub = byLabel
+        ? [...g.projects.entries()]
+            .sort((a, b) => b[1] - a[1])
+            .map(([p, h]) => `<tr><td style="padding-left:26px" class="muted">${esc(p)}</td><td class="num">${h.toFixed(2)}</td><td></td><td class="num">${rate ? money(h * rate) : ''}</td></tr>`)
+            .join('')
+        : '';
+      return head + sub;
+    })
+    .join('');
+  $('#ts-table tbody').innerHTML = body || '<tr><td colspan="4" class="empty">No time tracked in this period</td></tr>';
+  $('#ts-table tfoot').innerHTML = gs.length ? `<tr><td>Total</td><td class="num">${totalHours.toFixed(2)}</td><td></td><td class="num">${total ? money(total) : '—'}</td></tr>` : '';
+  document.querySelectorAll('#ts-table input[data-label]').forEach((i) => i.addEventListener('input', () => {
+    ts.rates = { ...(ts.rates || {}), [i.dataset.label]: Number(i.value) || 0 };
+    clearTimeout(drawTimesheet.t);
+    drawTimesheet.t = setTimeout(drawTimesheet, 500);
+  }));
+  const labels = [...new Set(ts.rows.map((r) => r.label || 'No label'))];
+  $('#ts-bill').innerHTML = ['All clients', ...labels].map((l) => `<option>${esc(l)}</option>`).join('');
+}
+$('#ts-preset').addEventListener('change', () => {
+  document.querySelectorAll('.ts-custom').forEach((el) => el.classList.toggle('hidden', $('#ts-preset').value !== 'custom'));
+  loadTimesheet();
+});
+['#ts-start', '#ts-end'].forEach((sel) => $(sel).addEventListener('change', () => $('#ts-preset').value === 'custom' && loadTimesheet()));
+['#ts-group', '#ts-round', '#ts-currency'].forEach((sel) => $(sel).addEventListener('change', () => ts && drawTimesheet()));
+$('#ts-save-rates').onclick = async () => {
+  try {
+    const { data } = await api('/users/current/settings', {
+      method: 'PUT',
+      body: JSON.stringify({ label_rates: ts.rates || {}, currency: $('#ts-currency').value }),
+    });
+    settings = { ...settings, ...data };
+    toast('Rates saved');
+  } catch (e) {
+    toast(e.message);
+  }
+};
+$('#ts-csv').onclick = () => {
+  if (!ts) return;
+  const q = (v) => `"${String(v).replace(/"/g, '""')}"`;
+  const lines = [['Date', 'Label', 'Project', 'Hours', 'Rate', 'Amount', 'Currency'].join(',')];
+  for (const r of ts.rows) {
+    const label = r.label || 'No label';
+    const h = roundedHours(r.seconds);
+    const rate = rateFor(label);
+    lines.push([r.day, q(label), q(r.project), h.toFixed(2), rate.toFixed(2), (h * rate).toFixed(2), $('#ts-currency').value].join(','));
+  }
+  const blob = new Blob([lines.join('\n') + '\n'], { type: 'text/csv' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `timesheet-${ts.start}-to-${ts.end}.csv`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+};
+$('#ts-invoice').onclick = () => {
+  if (!ts) return;
+  const bill = $('#ts-bill').value;
+  const rows = new Map();
+  for (const r of ts.rows) {
+    const label = r.label || 'No label';
+    if (bill !== 'All clients' && label !== bill) continue;
+    const cur = rows.get(r.project) || { label, hours: 0 };
+    cur.hours += roundedHours(r.seconds);
+    rows.set(r.project, cur);
+  }
+  let total = 0;
+  const lines = [...rows.entries()]
+    .sort((a, b) => b[1].hours - a[1].hours)
+    .map(([project, v]) => {
+      const rate = rateFor(v.label);
+      total += v.hours * rate;
+      return `<tr><td>${esc(project)}</td><td class="r">${v.hours.toFixed(2)}</td><td class="r">${money(rate)}</td><td class="r">${money(v.hours * rate)}</td></tr>`;
+    })
+    .join('');
+  const no = `INV-${ts.end.replace(/-/g, '').slice(0, 6)}-${String(Math.floor(Math.random() * 900) + 100)}`;
+  $('#invoice').innerHTML = `
+    <h1>Invoice</h1><div class="label">${esc(no)} · ${esc(prettyDate(localToday(), { year: 'numeric', month: 'long', day: 'numeric' }))}</div>
+    <div class="meta">
+      <div><div class="label">From</div><b>${esc(ts.display_name)}</b></div>
+      <div><div class="label">Bill to</div><b>${esc(bill)}</b></div>
+      <div><div class="label">Period</div>${esc(prettyDate(ts.start, { month: 'short', day: 'numeric', year: 'numeric' }))} – ${esc(prettyDate(ts.end, { month: 'short', day: 'numeric', year: 'numeric' }))}</div>
+    </div>
+    <table><thead><tr><th>Project</th><th class="r">Hours</th><th class="r">Rate</th><th class="r">Amount</th></tr></thead>
+    <tbody>${lines || '<tr><td colspan="4">No time in this period</td></tr>'}</tbody>
+    <tfoot><tr><td>Total</td><td></td><td></td><td class="r">${money(total)}</td></tr></tfoot></table>
+    <div class="foot">Hours tracked automatically with Waqt.</div>`;
+  document.body.classList.add('printing');
+  window.print();
+  setTimeout(() => document.body.classList.remove('printing'), 500);
 };
 
 // ---------- share ----------
@@ -437,7 +608,7 @@ function start() {
   const r = store('waqt_range');
   if (r && [...$('#range').options].some((o) => o.value === r)) $('#range').value = r;
   const tab = location.hash.slice(1);
-  showTab(['projects', 'share', 'setup', 'settings'].includes(tab) ? tab : 'overview');
+  showTab(['projects', 'timesheets', 'share', 'setup', 'settings'].includes(tab) ? tab : 'overview');
   loadOverview().catch((e) => {
     $('#notice').innerHTML = `<div class="banner">${esc(e.message)}</div>`;
   });

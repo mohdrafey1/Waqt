@@ -251,6 +251,34 @@ api.post('/users/current/report/test', requireAuth, async (c) => {
   return c.json({ data: { ...result, preview: [r.title, ...r.lines] } });
 });
 
+// Time per day and project (after renames), with labels and rates, for Timesheets.
+api.get('/users/current/timesheet', requireAuth, async (c) => {
+  const s = c.get('settings');
+  const start = c.req.query('start') || '';
+  const end = c.req.query('end') || '';
+  if (!isDay(start) || !isDay(end) || start > end) return c.json({ error: 'start and end must be YYYY-MM-DD, start first' }, 400);
+  if (addDays(start, 366) < end) return c.json({ error: 'At most one year at a time' }, 400);
+  await flushDirty(c.env, s, 2);
+  const { results } = await c.env.DB.prepare(
+    'SELECT day, project, SUM(seconds) AS secs FROM daily_summaries WHERE day BETWEEN ?1 AND ?2 GROUP BY day, project',
+  )
+    .bind(start, end)
+    .all<{ day: string; project: string; secs: number }>();
+  const merged = new Map<string, { day: string; project: string; label: string; seconds: number }>();
+  for (const r of results) {
+    const project = r.project ? aliasOf(s, r.project) : 'Unknown Project';
+    const key = `${r.day}\u0000${project}`;
+    const row = merged.get(key) || { day: r.day, project, label: s.project_labels[project] || '', seconds: 0 };
+    row.seconds += r.secs;
+    merged.set(key, row);
+  }
+  const rows = [...merged.values()]
+    .filter((r) => r.seconds >= 1)
+    .map((r) => ({ ...r, seconds: Math.round(r.seconds) }))
+    .sort((a, b) => (a.day < b.day ? -1 : a.day > b.day ? 1 : b.seconds - a.seconds));
+  return c.json({ data: { start, end, currency: s.currency, rates: s.label_rates, display_name: s.display_name || s.username, rows } });
+});
+
 // Every project name ever seen (before renames), for the Projects tab.
 api.get('/users/current/projects', requireAuth, async (c) => {
   const { results } = await c.env.DB.prepare(
@@ -345,6 +373,22 @@ api.put('/users/current/settings', requireAuth, async (c) => {
     const chat = String(body.report_telegram_chat ?? '').trim();
     if (!chat || /^-?\d{1,20}$|^@[A-Za-z0-9_]{4,}$/.test(chat)) out.report_telegram_chat = chat;
     else errors.push('The Telegram chat ID is a number (or @channel)');
+  }
+  if ('label_rates' in body) {
+    const r = body.label_rates;
+    if (r && typeof r === 'object' && !Array.isArray(r)) {
+      const clean: Record<string, number> = {};
+      for (const [k, v] of Object.entries(r).slice(0, 500)) {
+        const n = Number(v);
+        if (k.trim() && Number.isFinite(n) && n >= 0 && n < 1e7) clean[k.trim().slice(0, 200)] = Math.round(n * 100) / 100;
+      }
+      out.label_rates = JSON.stringify(clean);
+    } else errors.push('label_rates must be an object of "label": rate');
+  }
+  if ('currency' in body) {
+    const cur = String(body.currency || '').toUpperCase();
+    if (/^[A-Z]{3}$/.test(cur)) out.currency = cur;
+    else errors.push('currency must be a 3-letter code like USD or INR');
   }
   if (typeof body.site_url === 'string' && /^https?:\/\/[^\s/]+$/.test(body.site_url)) out.site_url = body.site_url;
   if (errors.length) return c.json({ error: errors.join('; ') }, 400);

@@ -210,3 +210,23 @@ textarea { resize: vertical; min-height: 90px; font-family: var(--mono); font-si
 .goal .bar { height: 10px; background: var(--panel-2); border-radius: 6px; overflow: hidden; margin-top: 10px; }
 .goal .bar div { height: 100%; background: var(--accent); border-radius: 6px; transition: width .4s; }
 .goal .bar div.done { background: var(--ok); }
+
+/* ---------- invoice (print only) ---------- */
+.invoice { display: none; }
+input[type='date'] { background: var(--panel-2); color: var(--text); border: 1px solid var(--border); border-radius: 9px; padding: 7px 10px; font: inherit; }
+@media print {
+  @page { margin: 18mm; }
+  body.printing > *:not(.invoice) { display: none !important; }
+  body.printing .invoice { display: block; color: #111; background: #fff; font: 13px/1.5 var(--font); padding: 0; }
+  body.printing { background: #fff; }
+  .invoice h1 { font-size: 26px; margin: 0 0 4px; }
+  .invoice .meta { display: flex; justify-content: space-between; gap: 30px; margin: 26px 0; }
+  .invoice .meta div { min-width: 0; }
+  .invoice .label { color: #666; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; }
+  .invoice table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+  .invoice th, .invoice td { padding: 9px 6px; border-bottom: 1px solid #ddd; text-align: left; }
+  .invoice th { font-size: 11px; color: #666; text-transform: uppercase; letter-spacing: .05em; }
+  .invoice .r { text-align: right; }
+  .invoice tfoot td { font-weight: 700; font-size: 15px; border-bottom: 0; }
+  .invoice .foot { margin-top: 40px; color: #888; font-size: 11px; }
+}

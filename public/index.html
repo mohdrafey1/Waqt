@@ -31,6 +31,7 @@
         <nav class="tabs">
           <button class="tab active" data-tab="overview">Overview</button>
           <button class="tab" data-tab="projects">Projects</button>
+          <button class="tab" data-tab="timesheets">Timesheets</button>
           <button class="tab" data-tab="share">Share</button>
           <button class="tab" data-tab="setup">Setup</button>
           <button class="tab" data-tab="settings">Settings</button>
@@ -89,6 +90,49 @@
           </div>
           <datalist id="label-options"></datalist>
           <div class="row" style="margin-top:14px"><button class="btn primary" id="proj-save" type="button">Save changes</button><span class="err" id="proj-err"></span></div>
+        </div>
+      </section>
+
+      <!-- Timesheets -->
+      <section data-view="timesheets" class="hidden">
+        <div class="panel" style="margin-top:22px">
+          <div class="panel-head"><h2>Timesheet</h2><span class="muted" id="ts-range-text"></span></div>
+          <div class="row" style="margin-bottom:16px">
+            <label>Period
+              <select id="ts-preset">
+                <option value="this_week">This week</option>
+                <option value="last_week">Last week</option>
+                <option value="this_month" selected>This month</option>
+                <option value="last_month">Last month</option>
+                <option value="custom">Custom…</option>
+              </select>
+            </label>
+            <label class="ts-custom hidden">From <input type="date" id="ts-start"></label>
+            <label class="ts-custom hidden">To <input type="date" id="ts-end"></label>
+            <label>Group by
+              <select id="ts-group"><option value="label">Label (client)</option><option value="project">Project</option></select>
+            </label>
+            <label>Round each day up to
+              <select id="ts-round"><option value="0">No rounding</option><option value="6">6 mins</option><option value="15" selected>15 mins</option><option value="30">30 mins</option><option value="60">1 hour</option></select>
+            </label>
+            <label>Currency
+              <select id="ts-currency"><option>USD</option><option>INR</option><option>EUR</option><option>GBP</option><option>AED</option><option>CAD</option><option>AUD</option><option>SGD</option><option>JPY</option></select>
+            </label>
+          </div>
+          <div style="overflow-x:auto">
+            <table class="table" id="ts-table">
+              <thead><tr><th>Client / project</th><th style="text-align:right">Hours</th><th style="text-align:right">Rate / hr</th><th style="text-align:right">Amount</th></tr></thead>
+              <tbody></tbody>
+              <tfoot></tfoot>
+            </table>
+          </div>
+          <p class="faint" style="font-size:12.5px">Rates are set per label. Give projects a label (like a client name) in the Projects tab.</p>
+          <div class="row" style="margin-top:6px">
+            <button class="btn" id="ts-save-rates" type="button">Save rates</button>
+            <button class="btn" id="ts-csv" type="button">Export CSV</button>
+            <label>Invoice for <select id="ts-bill"></select></label>
+            <button class="btn primary" id="ts-invoice" type="button">Print invoice</button>
+          </div>
         </div>
       </section>
 
@@ -246,6 +290,8 @@
       </section>
     </main>
   </div>
+
+  <div id="invoice" class="invoice"></div>
 
   <script type="module" src="/app.js"></script>
 </body>
