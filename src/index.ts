@@ -2,7 +2,9 @@ import { Hono } from 'hono';
 import { retryForwardQueue } from './forward';
 import { maybeSendWeekly } from './report';
 import { type AppEnv, configuredKey } from './http';
+import { reparseUserAgents } from './maintenance';
 import { ensureMigrated } from './migrate';
+import { PARSER_VERSION } from './useragent';
 import { badges, cards } from './routes/cards';
 import { api } from './routes/api';
 import { Env, loadSettings, saveSettings } from './settings';
@@ -36,6 +38,7 @@ export default {
           await markAllRawDaysDirty(env, s);
           await saveSettings(env.DB, { needs_rebuild: '0' });
         }
+        if (s.parser_version !== PARSER_VERSION) await reparseUserAgents(env, s);
         await flushDirty(env, s, 5);
         await pruneRaw(env, s);
         await retryForwardQueue(env, s);

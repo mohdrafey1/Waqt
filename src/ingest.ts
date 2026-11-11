@@ -24,6 +24,7 @@ type Row = [
   number | null, // 17 ai_output_tokens
   number | null, // 18 ai_cached_input_tokens
   number | null, // 19 ai_prompt_length
+  string, // 20 raw user agent (stored in user_agents)
 ];
 
 const str = (v: unknown, max = 200): string => (typeof v === 'string' ? v.trim().slice(0, max) : '');
@@ -37,7 +38,8 @@ export function normalize(raw: any, machine: string, fallbackUa: string): Row | 
   if (!Number.isFinite(time) || time < MIN_TIME || time > Date.now() / 1000 + 86400) return null;
   const entity = str(raw.entity, 512);
   if (!entity) return null;
-  const { editor, os, model } = parseUserAgent(str(raw.user_agent, 400) || fallbackUa);
+  const ua = str(raw.user_agent, 400) || fallbackUa.slice(0, 400);
+  const { editor, os, model } = parseUserAgent(ua);
   return [
     Math.round(time * 1e6) / 1e6,
     entity,
@@ -59,13 +61,17 @@ export function normalize(raw: any, machine: string, fallbackUa: string): Row | 
     int(raw.ai_output_tokens),
     int(raw.ai_cached_input_tokens),
     int(raw.ai_prompt_length),
+    ua,
   ];
 }
 
 export const INSERT_SQL = `INSERT OR IGNORE INTO heartbeats
-  (time, entity, type, category, project, branch, language, editor, os, machine, is_write, lines, ai_line_changes, human_line_changes, ai_model, ai_session, ai_input_tokens, ai_output_tokens, ai_cached_tokens, ai_prompt_length)
-  SELECT json_extract(value, '$[0]'), json_extract(value, '$[1]'), json_extract(value, '$[2]'), json_extract(value, '$[3]'), json_extract(value, '$[4]'), json_extract(value, '$[5]'), json_extract(value, '$[6]'), json_extract(value, '$[7]'), json_extract(value, '$[8]'), json_extract(value, '$[9]'), json_extract(value, '$[10]'), json_extract(value, '$[11]'), json_extract(value, '$[12]'), json_extract(value, '$[13]'), json_extract(value, '$[14]'), json_extract(value, '$[15]'), json_extract(value, '$[16]'), json_extract(value, '$[17]'), json_extract(value, '$[18]'), json_extract(value, '$[19]')
-  FROM json_each(?1)`;
+  (time, entity, type, category, project, branch, language, editor, os, machine, is_write, lines, ai_line_changes, human_line_changes, ai_model, ai_session, ai_input_tokens, ai_output_tokens, ai_cached_tokens, ai_prompt_length, user_agent_id)
+  SELECT json_extract(j.value, '$[0]'), json_extract(j.value, '$[1]'), json_extract(j.value, '$[2]'), json_extract(j.value, '$[3]'), json_extract(j.value, '$[4]'), json_extract(j.value, '$[5]'), json_extract(j.value, '$[6]'), json_extract(j.value, '$[7]'), json_extract(j.value, '$[8]'), json_extract(j.value, '$[9]'), json_extract(j.value, '$[10]'), json_extract(j.value, '$[11]'), json_extract(j.value, '$[12]'), json_extract(j.value, '$[13]'), json_extract(j.value, '$[14]'), json_extract(j.value, '$[15]'), json_extract(j.value, '$[16]'), json_extract(j.value, '$[17]'), json_extract(j.value, '$[18]'), json_extract(j.value, '$[19]'),
+         (SELECT u.id FROM user_agents u WHERE u.value = json_extract(j.value, '$[20]'))
+  FROM json_each(?1) AS j`;
+
+const UA_SQL = `INSERT OR IGNORE INTO user_agents (value) SELECT value FROM json_each(?1) WHERE value != ''`;
 
 export const MAX_BATCH = 1000;
 
@@ -142,7 +148,11 @@ export async function ingest(
 
   await resolveLastLanguage(env, rows);
   if (rows.length) {
-    await env.DB.prepare(INSERT_SQL).bind(JSON.stringify(rows)).run();
+    const uas = [...new Set(rows.map((r) => r[20]).filter(Boolean))];
+    await env.DB.batch([
+      env.DB.prepare(UA_SQL).bind(JSON.stringify(uas)),
+      env.DB.prepare(INSERT_SQL).bind(JSON.stringify(rows)),
+    ]);
     await markDaysDirty(env, [...days]);
     // Remember when Waqt's own data starts, so WakaTime imports never double count.
     if (!s.first_heartbeat) {

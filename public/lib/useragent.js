@@ -1,6 +1,12 @@
 // Parses the user agent the WakaTime CLI sends (shared by the Worker and the browser import), e.g.
 // "wakatime/v1.130.0 (linux-6.8.0-x86_64) go1.24.4 cursor/1.2.3 vscode-wakatime/25.0.0"
 
+/**
+ * Bump this whenever the rules below change: the Worker then re-reads every stored
+ * heartbeat's user agent and rebuilds the totals that changed.
+ */
+export const PARSER_VERSION = 2;
+
 export const OS_NAMES = {
   darwin: 'macOS',
   mac: 'macOS',

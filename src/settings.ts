@@ -37,6 +37,7 @@ export interface Settings {
   needs_rebuild: boolean;
   first_heartbeat: number; // unix time of the first heartbeat Waqt ever received (0 = none yet)
   site_url: string; // where the dashboard lives, for links in reports
+  parser_version: number; // user-agent parser version the stored heartbeats were read with
 }
 
 const DEFAULTS: Record<string, string> = {
@@ -66,6 +67,7 @@ const DEFAULTS: Record<string, string> = {
   needs_rebuild: '0',
   first_heartbeat: '0',
   site_url: '',
+  parser_version: '0',
 };
 
 function obj<T>(json: string, check: (v: unknown) => v is T): Record<string, T> {
@@ -116,6 +118,7 @@ function parse(raw: Record<string, string>): Settings {
     needs_rebuild: v.needs_rebuild === '1',
     first_heartbeat: Number(v.first_heartbeat) || 0,
     site_url: v.site_url,
+    parser_version: Number(v.parser_version) || 0,
   };
 }
 
