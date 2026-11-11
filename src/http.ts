@@ -1,4 +1,5 @@
 import type { Context, MiddlewareHandler } from 'hono';
+import { ensureMigrated } from './migrate';
 import { Env, Settings, loadSettings } from './settings';
 import type { View } from './stats';
 
@@ -44,10 +45,11 @@ export function isAuthed(c: C): boolean {
 
 export const withSettings: MiddlewareHandler<AppEnv> = async (c, next) => {
   try {
+    await ensureMigrated(c.env.DB);
     c.set('settings', await loadSettings(c.env.DB));
   } catch (e) {
     return c.json(
-      { error: 'Database is not ready. Run `npm run db:local` (local) or redeploy so migrations apply.', detail: String(e) },
+      { error: 'Database is not ready. Check that the D1 database is bound as DB, then redeploy.', detail: String(e) },
       500,
     );
   }

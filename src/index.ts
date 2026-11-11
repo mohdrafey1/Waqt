@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { retryForwardQueue } from './forward';
 import { maybeSendWeekly } from './report';
 import { type AppEnv, configuredKey } from './http';
+import { ensureMigrated } from './migrate';
 import { badges, cards } from './routes/cards';
 import { api } from './routes/api';
 import { Env, loadSettings, saveSettings } from './settings';
@@ -28,6 +29,7 @@ export default {
   async scheduled(_event: ScheduledController, env: Env, ctx: ExecutionContext) {
     ctx.waitUntil(
       (async () => {
+        await ensureMigrated(env.DB);
         const s = await loadSettings(env.DB);
         if (s.needs_rebuild) {
           // After an upgrade that adds new kinds of totals, rebuild days we still have raw data for.

@@ -1,0 +1,58 @@
+// Applies database migrations from inside the Worker if the deploy didn't.
+//
+// `npm run deploy` already runs `wrangler d1 migrations apply`, but a Worker can be
+// deployed with a different command (for example `npx wrangler deploy`). Then the
+// first request applies whatever is missing, recording it in the same
+// `d1_migrations` table Wrangler uses, so Wrangler and the Worker never repeat
+// each other's work.
+
+import m0001 from '../migrations/0001_init.sql';
+import m0002 from '../migrations/0002_hours_ai_import.sql';
+
+const MIGRATIONS: [string, string][] = [
+  ['0001_init.sql', m0001],
+  ['0002_hours_ai_import.sql', m0002],
+];
+
+let checked = false;
+
+export function splitSql(sql: string): string[] {
+  return sql
+    .split('\n')
+    .filter((line) => !line.trim().startsWith('--'))
+    .join('\n')
+    .split(/;\s*(?:\n|$)/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+export async function ensureMigrated(db: D1Database): Promise<void> {
+  if (checked) return;
+  let applied = new Set<string>();
+  try {
+    const { results } = await db.prepare('SELECT name FROM d1_migrations').all<{ name: string }>();
+    applied = new Set(results.map((r) => r.name));
+  } catch {
+    // No migrations table yet: nothing has been applied.
+  }
+  const pending = MIGRATIONS.filter(([name]) => !applied.has(name));
+  if (pending.length) {
+    await db
+      .prepare(
+        'CREATE TABLE IF NOT EXISTS d1_migrations (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE, applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL)',
+      )
+      .run();
+    for (const [name, sql] of pending) {
+      const stmts = splitSql(sql).map((s) => db.prepare(s));
+      stmts.push(db.prepare('INSERT OR IGNORE INTO d1_migrations (name) VALUES (?1)').bind(name));
+      try {
+        await db.batch(stmts); // one transaction: all or nothing
+      } catch (e) {
+        // Another request may have applied it at the same moment.
+        const done = await db.prepare('SELECT 1 AS ok FROM d1_migrations WHERE name = ?1').bind(name).first();
+        if (!done) throw e;
+      }
+    }
+  }
+  checked = true;
+}
