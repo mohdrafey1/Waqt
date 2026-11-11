@@ -9,6 +9,12 @@
 #     if you set the repository variable WAQT_UPDATE_MODE to "direct"
 #     (Settings → Secrets and variables → Actions → Variables).
 #
+# GitHub doesn't let a workflow change workflow files (.github/workflows) with its
+# own token, so when those change upstream the run lists them for you to copy.
+# To include them automatically, add a secret WAQT_UPDATE_TOKEN: a fine-grained
+# personal access token for this repository with Contents, Pull requests and
+# Workflows set to "Read and write".
+#
 # Run it any time from the Actions tab ("Update Waqt" → Run workflow).
 # In the main Waqt repository itself it does nothing.
 
@@ -30,12 +36,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.WAQT_UPDATE_TOKEN || github.token }}
 
       - name: Pull the latest Waqt
         env:
           UPSTREAM: ${{ vars.WAQT_UPSTREAM || 'mohdrafey1/waqt' }}
           MODE: ${{ vars.WAQT_UPDATE_MODE || 'pr' }}
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.WAQT_UPDATE_TOKEN || github.token }}
+          HAS_PAT: ${{ secrets.WAQT_UPDATE_TOKEN != '' }}
         run: |
           set -euo pipefail
           if [ "${GITHUB_REPOSITORY,,}" = "${UPSTREAM,,}" ]; then
@@ -76,6 +85,20 @@ jobs:
             mv /tmp/lock.json package-lock.json
           fi
 
+          # Without WAQT_UPDATE_TOKEN, GitHub refuses pushes that touch workflow files.
+          WF_NOTE=""
+          if [ "${HAS_PAT}" != "true" ]; then
+            WF_CHANGED="$(git status --porcelain -- .github/workflows | awk '{print $NF}' | tr '\n' ' ')"
+            if [ -n "${WF_CHANGED// /}" ]; then
+              git checkout HEAD -- .github/workflows 2>/dev/null || true
+              git clean -fdq -- .github/workflows
+              WF_NOTE="These workflow files changed in Waqt but GitHub doesn't let this workflow update them: ${WF_CHANGED}. Copy them from https://github.com/${UPSTREAM}/tree/HEAD/.github/workflows, or add a WAQT_UPDATE_TOKEN secret so updates include them (see the top of waqt-update.yml)."
+              echo "::warning::${WF_NOTE}"
+              echo "### Workflow files to update by hand" >> "$GITHUB_STEP_SUMMARY"
+              echo "${WF_NOTE}" >> "$GITHUB_STEP_SUMMARY"
+            fi
+          fi
+
           if git diff --quiet && [ -z "$(git ls-files --others --exclude-standard)" ]; then
             echo "Already up to date with ${UPSTREAM}@${NEW_SHA}."
             exit 0
@@ -100,6 +123,7 @@ jobs:
             exit 0
           fi
           BODY="This brings your Waqt up to date with [${UPSTREAM}](https://github.com/${UPSTREAM}) (\`${NEW_SHA}\`). Your Worker name, database, routes and variables are kept. Merge it and Cloudflare redeploys automatically; database changes are applied during the deploy."
+          if [ -n "${WF_NOTE}" ]; then BODY="$(printf '%s\n\n**Note:** %s' "${BODY}" "${WF_NOTE}")"; fi
           if gh pr create --head waqt-update --base "$BRANCH" --title "Update Waqt" --body "$BODY"; then
             exit 0
           fi
