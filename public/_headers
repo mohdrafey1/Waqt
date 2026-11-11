@@ -1,0 +1,13 @@
+# The private dashboard must never be framed by another site.
+/
+  X-Frame-Options: DENY
+  Content-Security-Policy: frame-ancestors 'none'
+  Referrer-Policy: no-referrer
+/index.html
+  X-Frame-Options: DENY
+  Content-Security-Policy: frame-ancestors 'none'
+  Referrer-Policy: no-referrer
+
+# The public profile is meant to be embedded anywhere.
+/profile/*
+  Content-Security-Policy: frame-ancestors *

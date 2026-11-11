@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Waqt · Dashboard</title>
+  <meta name="robots" content="noindex">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <!-- Login -->
+  <main id="login" class="login hidden">
+    <div class="panel">
+      <span class="logo" id="login-logo"></span>
+      <h1>Sign in to your dashboard</h1>
+      <p class="muted" style="margin:0">Use the API key you set as the <code>API_KEY</code> secret when you deployed.</p>
+      <form id="login-form">
+        <input id="login-key" type="password" placeholder="xxxxxxxx-xxxx-4xxx-xxxx-xxxxxxxxxxxx" autocomplete="current-password" required>
+        <button class="btn primary" type="submit">Open dashboard</button>
+        <div class="err" id="login-err"></div>
+      </form>
+    </div>
+  </main>
+
+  <!-- App -->
+  <div id="app" class="hidden">
+    <header class="topbar">
+      <div class="wrap">
+        <a class="logo" href="/" id="app-logo"></a>
+        <nav class="tabs">
+          <button class="tab active" data-tab="overview">Overview</button>
+          <button class="tab" data-tab="share">Share</button>
+          <button class="tab" data-tab="setup">Setup</button>
+          <button class="tab" data-tab="settings">Settings</button>
+        </nav>
+        <div class="spacer"></div>
+        <select id="range" aria-label="Date range">
+          <option value="today">Today</option>
+          <option value="yesterday">Yesterday</option>
+          <option value="last_7_days" selected>Last 7 days</option>
+          <option value="last_30_days">Last 30 days</option>
+          <option value="last_6_months">Last 6 months</option>
+          <option value="last_year">Last year</option>
+          <option value="all_time">All time</option>
+        </select>
+        <button class="btn small" id="logout" title="Sign out">Sign out</button>
+      </div>
+    </header>
+
+    <main class="wrap">
+      <div id="notice"></div>
+
+      <!-- Overview -->
+      <section data-view="overview">
+        <div class="grid tiles" id="tiles"></div>
+        <div class="panel section" id="daily-panel">
+          <div class="panel-head"><h2>Coding time</h2><span class="muted" id="daily-sub"></span></div>
+          <div id="daily"></div>
+        </div>
+        <div class="panel section">
+          <div class="panel-head"><h2>Last year</h2><span class="muted" id="heat-sub"></span></div>
+          <div id="heat"></div>
+        </div>
+        <div class="grid three section">
+          <div class="panel"><div class="panel-head"><h2>Projects</h2></div><div id="projects"></div></div>
+          <div class="panel"><div class="panel-head"><h2>Languages</h2></div><div id="languages"></div></div>
+          <div class="panel"><div class="panel-head"><h2>Editors</h2></div><div id="editors"></div></div>
+          <div class="panel"><div class="panel-head"><h2>Activity</h2></div><div id="categories"></div></div>
+          <div class="panel"><div class="panel-head"><h2>Operating systems</h2></div><div id="operating_systems"></div></div>
+          <div class="panel"><div class="panel-head"><h2>Machines</h2></div><div id="machines"></div></div>
+        </div>
+      </section>
+
+      <!-- Share -->
+      <section data-view="share" class="hidden">
+        <div class="grid two" style="margin-top:22px">
+          <div class="panel">
+            <div class="panel-head"><h2>README card builder</h2><span class="muted">Live preview</span></div>
+            <div class="row" style="margin-bottom:14px">
+              <label>Card
+                <select id="c-kind">
+                  <option value="languages">Top languages</option>
+                  <option value="stats">Coding stats</option>
+                  <option value="heatmap">Activity heatmap</option>
+                  <option value="editors">Editors</option>
+                  <option value="categories">Activity types</option>
+                  <option value="os">Operating systems</option>
+                  <option value="projects">Projects</option>
+                  <option value="badge">Badge</option>
+                </select>
+              </label>
+              <label>Range
+                <select id="c-range">
+                  <option value="today">Today</option>
+                  <option value="last_7_days" selected>Last 7 days</option>
+                  <option value="last_30_days">Last 30 days</option>
+                  <option value="last_6_months">Last 6 months</option>
+                  <option value="last_year">Last year</option>
+                  <option value="all_time">All time</option>
+                </select>
+              </label>
+              <label>Theme
+                <select id="c-theme">
+                  <option value="auto">Auto (follows viewer)</option>
+                  <option value="dark">Dark</option>
+                  <option value="light">Light</option>
+                  <option value="transparent">Transparent</option>
+                </select>
+              </label>
+              <label>Layout
+                <select id="c-layout"><option value="list">List</option><option value="compact">Compact</option></select>
+              </label>
+              <label>Items
+                <select id="c-count"><option>4</option><option selected>6</option><option>8</option><option>10</option></select>
+              </label>
+            </div>
+            <div class="preview" id="c-preview"></div>
+            <h3 style="font-size:13px;margin:16px 0 8px">Markdown (GitHub README)</h3>
+            <div class="code" id="c-md"></div>
+            <h3 style="font-size:13px;margin:16px 0 8px">HTML (any website)</h3>
+            <div class="code" id="c-html"></div>
+          </div>
+          <div>
+            <div class="panel">
+              <div class="panel-head"><h2>Public profile page</h2></div>
+              <p class="muted" style="margin-top:0">A shareable page with your stats. Project names stay hidden unless you allow them in Settings.</p>
+              <div class="code" id="p-link"></div>
+              <h3 style="font-size:13px;margin:16px 0 8px">Embed on your website</h3>
+              <div class="code" id="p-iframe"></div>
+              <p class="faint" style="font-size:12.5px">Options: <code>range</code> (last_7_days, last_30_days, last_year, all_time), <code>theme</code> (auto, dark, light), <code>sections</code> (stats, heatmap, daily, languages, editors, categories, os, projects).</p>
+            </div>
+            <div class="panel section">
+              <div class="panel-head"><h2>Works with existing tools</h2></div>
+              <p class="muted" style="margin-top:0">Waqt speaks the WakaTime API, so tools built for WakaTime work too.</p>
+              <h3 style="font-size:13px;margin:12px 0 8px">github-readme-stats</h3>
+              <div class="code" id="t-grs"></div>
+              <h3 style="font-size:13px;margin:16px 0 8px">waka-readme GitHub Action</h3>
+              <div class="code" id="t-waka"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Setup -->
+      <section data-view="setup" class="hidden">
+        <div class="grid two" style="margin-top:22px">
+          <div class="panel">
+            <div class="panel-head"><h2>Connect your editors</h2></div>
+            <ol style="padding-left:18px;margin:0;display:grid;gap:14px">
+              <li>Install the free WakaTime plugin for your editor from <a href="https://wakatime.com/plugins" target="_blank" rel="noopener">wakatime.com/plugins</a> (VS Code, Cursor, JetBrains, Vim, Neovim, Sublime, Xcode, terminals, browsers and more). You don't need a WakaTime account.</li>
+              <li>Put this in <code>~/.wakatime.cfg</code> (on Windows: <code>%USERPROFILE%\.wakatime.cfg</code>):
+                <div class="code" id="cfg" style="margin-top:8px"></div>
+                <button class="btn small" id="reveal" style="margin-top:8px">Show key</button>
+              </li>
+              <li>Restart your editor and code for a couple of minutes. Your status bar shows today's time, and this dashboard fills in.</li>
+            </ol>
+          </div>
+          <div class="panel">
+            <div class="panel-head"><h2>Status</h2></div>
+            <dl class="kv" id="status"></dl>
+            <p class="faint" style="font-size:12.5px;margin-bottom:0">Raw activity is kept for your retention window; daily totals are kept forever, so your full history stays. Everything lives in your own Cloudflare account.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Settings -->
+      <section data-view="settings" class="hidden">
+        <form class="panel" id="settings-form" style="margin-top:22px;max-width:720px">
+          <div class="panel-head"><h2>Settings</h2></div>
+          <div class="grid two" style="gap:0 16px">
+            <div class="field"><label for="s-display">Display name</label><input id="s-display" type="text" maxlength="60" placeholder="Your name"></div>
+            <div class="field"><label for="s-username">Username</label><input id="s-username" type="text" maxlength="39"><span class="hint">Used in public API URLs. Any value works.</span></div>
+          </div>
+          <div class="field">
+            <label for="s-tz">Time zone</label>
+            <select id="s-tz" style="width:100%"></select>
+            <span class="hint">Decides where each day starts. Detected from your editor at first. Changing it rebuilds your recent history in the background.</span>
+          </div>
+          <label class="check"><input type="checkbox" id="s-public"><span><b>Public profile and cards</b><br><span class="muted">Needed for README cards, badges and the embeddable profile.</span></span></label>
+          <label class="check"><input type="checkbox" id="s-public-projects"><span><b>Show project names publicly</b><br><span class="muted">Off by default. Machine names and file paths are never public.</span></span></label>
+          <div class="field">
+            <label for="s-hidden">Always hide these projects from public views</label>
+            <textarea id="s-hidden" placeholder="client-work&#10;secret-startup"></textarea>
+            <span class="hint">One project per line. Their time still counts in totals.</span>
+          </div>
+          <div class="grid two" style="gap:0 16px">
+            <div class="field"><label for="s-timeout">Idle timeout (minutes)</label><input id="s-timeout" type="number" min="1" max="120"><span class="hint">Gaps longer than this between heartbeats aren't counted. WakaTime uses 15.</span></div>
+            <div class="field"><label for="s-retention">Keep raw activity (days)</label><input id="s-retention" type="number" min="0"><span class="hint">0 = forever. Daily totals are always kept. 365 keeps you well inside the free plan.</span></div>
+          </div>
+          <div class="row"><button class="btn primary" type="submit">Save settings</button><span class="err" id="s-err"></span></div>
+        </form>
+      </section>
+    </main>
+  </div>
+
+  <script type="module" src="/app.js"></script>
+</body>
+</html>
