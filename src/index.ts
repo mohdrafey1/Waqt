@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { retryForwardQueue } from './forward';
+import { maybeSendWeekly } from './report';
 import { type AppEnv, configuredKey } from './http';
 import { badges, cards } from './routes/cards';
 import { api } from './routes/api';
@@ -36,6 +37,7 @@ export default {
         await flushDirty(env, s, 5);
         await pruneRaw(env, s);
         await retryForwardQueue(env, s);
+        await maybeSendWeekly(env, s);
       })(),
     );
   },

@@ -55,6 +55,7 @@
       <!-- Overview -->
       <section data-view="overview">
         <div class="grid tiles" id="tiles"></div>
+        <div class="grid two section hidden" id="goals"></div>
         <div class="panel section" id="daily-panel">
           <div class="panel-head"><h2>Coding time</h2><span class="muted" id="daily-sub"></span></div>
           <div id="daily"></div>
@@ -223,6 +224,23 @@
             <div class="field"><label for="s-timeout">Idle timeout (minutes)</label><input id="s-timeout" type="number" min="1" max="120"><span class="hint">Gaps longer than this between heartbeats aren't counted. WakaTime uses 15.</span></div>
             <div class="field"><label for="s-retention">Keep raw activity (days)</label><input id="s-retention" type="number" min="0"><span class="hint">0 = forever. Daily totals are always kept. 365 keeps you well inside the free plan.</span></div>
           </div>
+          <h3 class="form-h">Goals</h3>
+          <div class="grid two" style="gap:0 16px">
+            <div class="field"><label for="s-goal-day">Daily goal</label>
+              <select id="s-goal-day" style="width:100%"><option value="0">Off</option><option value="30">30 mins</option><option value="60">1 hour</option><option value="90">1.5 hours</option><option value="120">2 hours</option><option value="180">3 hours</option><option value="240">4 hours</option><option value="300">5 hours</option><option value="360">6 hours</option><option value="480">8 hours</option></select></div>
+            <div class="field"><label for="s-goal-week">Weekly goal (hours)</label><input id="s-goal-week" type="number" min="0" max="168" placeholder="0 = off"></div>
+          </div>
+
+          <h3 class="form-h">Weekly report</h3>
+          <p class="hint" style="margin:-6px 0 12px">Every Monday at 9:00 your time: last week's total, goals, top languages and projects, AI use and streak.</p>
+          <label class="check"><input type="checkbox" id="s-report"><span><b>Send me a weekly report</b></span></label>
+          <div class="field"><label for="s-discord">Discord webhook URL</label><input id="s-discord" type="password" autocomplete="off" placeholder="https://discord.com/api/webhooks/…"><span class="hint">In Discord: Server settings → Integrations → Webhooks → New webhook → Copy URL.</span></div>
+          <div class="grid two" style="gap:0 16px">
+            <div class="field"><label for="s-tg-token">Telegram bot token</label><input id="s-tg-token" type="password" autocomplete="off" placeholder="123456789:ABC…"><span class="hint">Create a bot with @BotFather, then send it any message.</span></div>
+            <div class="field"><label for="s-tg-chat">Telegram chat ID</label><input id="s-tg-chat" type="text" placeholder="e.g. 123456789"><span class="hint">Get yours from @userinfobot.</span></div>
+          </div>
+          <div class="row" style="margin-bottom:18px"><button class="btn" type="button" id="s-report-test">Send a test report</button><span class="muted" id="s-report-result" style="font-size:13px"></span></div>
+
           <div class="row"><button class="btn primary" type="submit">Save settings</button><span class="err" id="s-err"></span></div>
         </form>
       </section>

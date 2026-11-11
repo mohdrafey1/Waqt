@@ -3,6 +3,7 @@ import { type C, type AppEnv, cors, requireAuth, viewFor, withSettings } from '.
 import { forwardHeartbeats, forwardHost, forwardKey, forwardQueueSize, forwardingEnabled } from '../forward';
 import { MAX_BATCH, ingest } from '../ingest';
 import { importer } from './importer';
+import { buildReport, sendReport } from '../report';
 import { aliasOf, loadSettings, publicSettingsView, saveSettings, tzOf } from '../settings';
 import { clearCache, getStats } from '../stats';
 import { flushDirty, markAllRawDaysDirty } from '../summaries';
@@ -242,6 +243,14 @@ api.get('/users/current/settings', requireAuth, async (c) => {
   });
 });
 
+// Send this week's report right now, to check the setup.
+api.post('/users/current/report/test', requireAuth, async (c) => {
+  const s = c.get('settings');
+  const r = await buildReport(c.env, s, todayIn(tzOf(s)), s.site_url);
+  const result = await sendReport(c.env, s, r);
+  return c.json({ data: { ...result, preview: [r.title, ...r.lines] } });
+});
+
 // Every project name ever seen (before renames), for the Projects tab.
 api.get('/users/current/projects', requireAuth, async (c) => {
   const { results } = await c.env.DB.prepare(
@@ -310,6 +319,34 @@ api.put('/users/current/settings', requireAuth, async (c) => {
     if (m) out.project_labels = JSON.stringify(m);
     else errors.push('project_labels must be an object of "project": "label"');
   }
+  if ('goal_daily_minutes' in body) {
+    const n = Math.trunc(Number(body.goal_daily_minutes));
+    if (n >= 0 && n <= 1440) out.goal_daily_minutes = String(n);
+    else errors.push('goal_daily_minutes must be 0–1440');
+  }
+  if ('goal_weekly_hours' in body) {
+    const n = Math.trunc(Number(body.goal_weekly_hours));
+    if (n >= 0 && n <= 168) out.goal_weekly_hours = String(n);
+    else errors.push('goal_weekly_hours must be 0–168');
+  }
+  if ('report_enabled' in body) out.report_enabled = body.report_enabled ? '1' : '0';
+  // Secrets: undefined = keep as is, '' = remove, otherwise replace.
+  if (typeof body.report_discord === 'string') {
+    const u = body.report_discord.trim();
+    if (!u || /^https:\/\/(discord|discordapp)\.com\/api\/webhooks\//.test(u) || /^https?:\/\/127\.0\.0\.1[:/]/.test(u)) out.report_discord = u;
+    else errors.push('The Discord webhook should start with https://discord.com/api/webhooks/');
+  }
+  if (typeof body.report_telegram_token === 'string') {
+    const t = body.report_telegram_token.trim();
+    if (!t || /^\d+:[A-Za-z0-9_-]{20,}$/.test(t)) out.report_telegram_token = t;
+    else errors.push('The Telegram bot token looks like 123456789:ABC… (from @BotFather)');
+  }
+  if ('report_telegram_chat' in body) {
+    const chat = String(body.report_telegram_chat ?? '').trim();
+    if (!chat || /^-?\d{1,20}$|^@[A-Za-z0-9_]{4,}$/.test(chat)) out.report_telegram_chat = chat;
+    else errors.push('The Telegram chat ID is a number (or @channel)');
+  }
+  if (typeof body.site_url === 'string' && /^https?:\/\/[^\s/]+$/.test(body.site_url)) out.site_url = body.site_url;
   if (errors.length) return c.json({ error: errors.join('; ') }, 400);
 
   await saveSettings(c.env.DB, out);

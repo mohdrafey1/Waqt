@@ -205,3 +205,8 @@ textarea { resize: vertical; min-height: 90px; font-family: var(--mono); font-si
 .table td input[type='text'] { padding: 6px 9px; min-width: 150px; }
 .table td.num { text-align: right; font-variant-numeric: tabular-nums; color: var(--muted); white-space: nowrap; }
 .table tfoot td { font-weight: 650; border-top: 1px solid var(--border); }
+
+.form-h { font-size: 14px; margin: 22px 0 12px; padding-top: 18px; border-top: 1px solid var(--border); }
+.goal .bar { height: 10px; background: var(--panel-2); border-radius: 6px; overflow: hidden; margin-top: 10px; }
+.goal .bar div { height: 100%; background: var(--accent); border-radius: 6px; transition: width .4s; }
+.goal .bar div.done { background: var(--ok); }

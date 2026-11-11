@@ -1,5 +1,5 @@
 import { runImport } from './import.js';
-import { LOGO, barList, copy, dailyBars, esc, fmt, heatmap, prettyDate, toast } from './shared.js';
+import { LOGO, addDays, barList, copy, dailyBars, esc, fmt, heatmap, prettyDate, toast } from './shared.js';
 
 const $ = (s) => document.querySelector(s);
 const origin = location.origin;
@@ -103,6 +103,7 @@ async function loadOverview() {
       ? tile('AI share of lines', `${Math.round((st.ai_lines / lines) * 100)}%`, `${st.ai_lines.toLocaleString()} AI · ${st.human_lines.toLocaleString()} you`)
       : tile('Top language', st.languages[0]?.name || '—', st.languages[0] ? fmt(st.languages[0].total_seconds) : ''));
 
+  renderGoals(year);
   const multiDay = st.start !== st.end;
   $('#daily-panel').classList.toggle('hidden', !multiDay);
   if (multiDay) {
@@ -126,6 +127,32 @@ async function loadOverview() {
   } else {
     $('#notice').innerHTML = '';
   }
+}
+
+// ---------- goals ----------
+function renderGoals(year) {
+  const g = year.goals || {};
+  const box = $('#goals');
+  if (!g.daily_minutes && !g.weekly_hours) {
+    box.classList.add('hidden');
+    return;
+  }
+  const today = year.end;
+  const byDay = new Map(year.days.map((d) => [d.date, d.total_seconds]));
+  const wd = new Date(today + 'T00:00:00Z').getUTCDay();
+  const monday = addDays(today, -((wd + 6) % 7));
+  let week = 0;
+  for (let d = monday; d <= today; d = addDays(d, 1)) week += byDay.get(d) || 0;
+  const card = (title, done, goal) => {
+    const pct = goal ? Math.min(100, (done / goal) * 100) : 0;
+    return `<div class="panel goal"><div class="panel-head" style="margin-bottom:4px"><h2>${title}</h2><span class="muted">${esc(fmt(done))} of ${esc(fmt(goal))}</span></div>
+      <div class="bar"><div class="${pct >= 100 ? 'done' : ''}" style="width:${pct}%"></div></div>
+      <div class="faint" style="font-size:12.5px;margin-top:6px">${pct >= 100 ? 'Goal reached 🎉' : `${esc(fmt(goal - done))} to go`}</div></div>`;
+  };
+  box.innerHTML =
+    (g.daily_minutes ? card('Today', byDay.get(today) || 0, g.daily_minutes * 60) : '') +
+    (g.weekly_hours ? card('This week', week, g.weekly_hours * 3600) : '');
+  box.classList.remove('hidden');
 }
 
 // ---------- projects ----------
@@ -336,11 +363,20 @@ function renderSettings() {
   $('#s-hidden').value = (settings.hidden_projects || []).join('\n');
   $('#s-timeout').value = settings.timeout_minutes;
   $('#s-retention').value = settings.raw_retention_days;
+  $('#s-goal-day').value = String(settings.goal_daily_minutes || 0);
+  if (!$('#s-goal-day').value) $('#s-goal-day').value = '0';
+  $('#s-goal-week').value = settings.goal_weekly_hours || '';
+  $('#s-report').checked = settings.report_enabled;
+  $('#s-discord').value = '';
+  $('#s-discord').placeholder = settings.report_discord_set ? 'Saved (type a new URL to replace, or clear below)' : 'https://discord.com/api/webhooks/…';
+  $('#s-tg-token').value = '';
+  $('#s-tg-token').placeholder = settings.report_telegram_set ? 'Saved (type a new token to replace)' : '123456789:ABC…';
+  $('#s-tg-chat').value = settings.report_telegram_chat || '';
+  $('#s-report-result').textContent = '';
   $('#s-err').textContent = '';
 }
 
-$('#settings-form').addEventListener('submit', async (e) => {
-  e.preventDefault();
+async function saveSettingsForm() {
   $('#s-err').textContent = '';
   try {
     const body = {
@@ -352,17 +388,50 @@ $('#settings-form').addEventListener('submit', async (e) => {
       hidden_projects: $('#s-hidden').value.split('\n').map((x) => x.trim()).filter(Boolean),
       timeout_minutes: Number($('#s-timeout').value),
       raw_retention_days: Number($('#s-retention').value),
+      goal_daily_minutes: Number($('#s-goal-day').value),
+      goal_weekly_hours: Number($('#s-goal-week').value || 0),
+      report_enabled: $('#s-report').checked,
+      report_telegram_chat: $('#s-tg-chat').value.trim(),
     };
+    // Only send secrets when typed, so saved ones aren't wiped.
+    if ($('#s-discord').value.trim()) body.report_discord = $('#s-discord').value.trim();
+    if ($('#s-tg-token').value.trim()) body.report_telegram_token = $('#s-tg-token').value.trim();
     const { data } = await api('/users/current/settings', { method: 'PUT', body: JSON.stringify(body) });
     settings = { ...settings, ...data };
     toast(data.rebuilding_days ? `Saved. Rebuilding ${data.rebuilding_days} days in the background.` : 'Saved');
+    renderSettings();
+    return true;
   } catch (err) {
     $('#s-err').textContent = err.message;
+    return false;
   }
+}
+$('#settings-form').addEventListener('submit', (e) => {
+  e.preventDefault();
+  saveSettingsForm();
 });
+
+$('#s-report-test').onclick = async () => {
+  $('#s-report-result').textContent = 'Sending…';
+  // Save first so a freshly typed webhook is used.
+  if (!(await saveSettingsForm())) {
+    $('#s-report-result').textContent = '';
+    return;
+  }
+  try {
+    const { data } = await api('/users/current/report/test', { method: 'POST' });
+    $('#s-report-result').textContent =
+      (data.sent.length ? `Sent to ${data.sent.join(' and ')}. ` : '') + data.errors.join(' ');
+  } catch (e) {
+    $('#s-report-result').textContent = e.message;
+  }
+};
 
 // ---------- boot ----------
 function start() {
+  if (settings.site_url !== location.origin) {
+    api('/users/current/settings', { method: 'PUT', body: JSON.stringify({ site_url: location.origin }) }).catch(() => {});
+  }
   $('#login').classList.add('hidden');
   $('#app').classList.remove('hidden');
   const r = store('waqt_range');

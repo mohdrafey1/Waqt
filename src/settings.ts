@@ -36,6 +36,7 @@ export interface Settings {
   last_report_week: string;
   needs_rebuild: boolean;
   first_heartbeat: number; // unix time of the first heartbeat Waqt ever received (0 = none yet)
+  site_url: string; // where the dashboard lives, for links in reports
 }
 
 const DEFAULTS: Record<string, string> = {
@@ -64,6 +65,7 @@ const DEFAULTS: Record<string, string> = {
   last_report_week: '',
   needs_rebuild: '0',
   first_heartbeat: '0',
+  site_url: '',
 };
 
 function obj<T>(json: string, check: (v: unknown) => v is T): Record<string, T> {
@@ -113,6 +115,7 @@ function parse(raw: Record<string, string>): Settings {
     last_report_week: v.last_report_week,
     needs_rebuild: v.needs_rebuild === '1',
     first_heartbeat: Number(v.first_heartbeat) || 0,
+    site_url: v.site_url,
   };
 }
 
@@ -170,6 +173,7 @@ export function publicSettingsView(s: Settings) {
     report_discord_set: !!s.report_discord,
     report_telegram_set: !!(s.report_telegram_token && s.report_telegram_chat),
     report_telegram_chat: s.report_telegram_chat,
+    site_url: s.site_url,
   };
 }
 
