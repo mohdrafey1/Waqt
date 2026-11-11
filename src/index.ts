@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { type AppEnv, configuredKey } from './http';
+import { badges, cards } from './routes/cards';
 import { api } from './routes/api';
 import { Env, loadSettings } from './settings';
 import { flushDirty, pruneRaw } from './summaries';
@@ -8,6 +9,8 @@ const app = new Hono<AppEnv>();
 
 app.route('/api/v1', api);
 app.route('/api', api);
+app.route('/card', cards);
+app.route('/badge', badges);
 
 app.get('/health', (c) => c.json({ ok: true, configured: !!configuredKey(c.env) }));
 
