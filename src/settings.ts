@@ -4,6 +4,10 @@ export interface Env {
   DB: D1Database;
   ASSETS: Fetcher;
   API_KEY?: string;
+  /** Optional: also send every heartbeat to WakaTime with this key. */
+  WAKATIME_API_KEY?: string;
+  /** Optional: forward somewhere other than WakaTime (any WakaTime-compatible API). */
+  WAKATIME_API_URL?: string;
 }
 
 export interface Settings {
@@ -17,6 +21,7 @@ export interface Settings {
   raw_retention_days: number;
   raw_since: number; // heartbeats before this unix time may have been pruned
   last_prune_day: string;
+  forward_error: string; // last forwarding error, empty when it's working
 }
 
 const DEFAULTS: Record<string, string> = {
@@ -30,6 +35,7 @@ const DEFAULTS: Record<string, string> = {
   raw_retention_days: '365',
   raw_since: '0',
   last_prune_day: '',
+  forward_error: '',
 };
 
 function parse(raw: Record<string, string>): Settings {
@@ -50,6 +56,7 @@ function parse(raw: Record<string, string>): Settings {
     raw_retention_days: clampInt(v.raw_retention_days, 0, 36500, 365),
     raw_since: Number(v.raw_since) || 0,
     last_prune_day: v.last_prune_day,
+    forward_error: v.forward_error,
   };
 }
 

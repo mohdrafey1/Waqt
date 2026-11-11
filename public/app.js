@@ -183,7 +183,14 @@ function renderSetup() {
     <dt>Raw heartbeats stored</dt><dd>${(s.heartbeats || 0).toLocaleString()}</dd>
     <dt>History since</dt><dd>${s.first_day ? esc(prettyDate(s.first_day, { year: 'numeric', month: 'short', day: 'numeric' })) : '—'}</dd>
     <dt>Days being recalculated</dt><dd>${s.pending_days || 0}</dd>
-    <dt>Time zone</dt><dd>${esc(settings.effective_timezone)}</dd>`;
+    <dt>Time zone</dt><dd>${esc(settings.effective_timezone)}</dd>
+    <dt>Also sending to WakaTime</dt><dd>${
+      !settings.forwarding
+        ? '<span class="faint">Off (optional, see below)</span>'
+        : settings.forwarding.error
+          ? `<span style="color:var(--danger)">Failing: ${esc(settings.forwarding.error)}</span>`
+          : `<span style="color:var(--ok)">On</span>, to ${esc(settings.forwarding.to)}`
+    }</dd>`;
 }
 $('#reveal').onclick = () => {
   revealed = !revealed;

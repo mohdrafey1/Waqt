@@ -25,6 +25,7 @@ WakaTime's free plan only keeps 1 week of history. Waqt is a small server you ru
 - **A public profile page** you can share or embed on your portfolio with an `<iframe>`.
 - **A private dashboard** with projects, languages, editors, activity type, OS, machines and a year heatmap.
 - **AI vs. you**: if your plugin reports AI line changes (Cursor, Copilot, Claude Code…), Waqt shows the split.
+- **Keep WakaTime too, if you want.** Waqt can pass every heartbeat on to WakaTime, so your WakaTime account and anything built on it keep working.
 - **Privacy by default.** Project names, machine names and file paths are never public unless you say so.
 - **₹0 / $0.** No credit card, no subscription. Cloudflare's free plan is plenty for one person.
 
@@ -52,6 +53,12 @@ Every push to your copy of the repo redeploys automatically.
 3. Restart your editor. After a couple of minutes your status bar shows today's time and the dashboard fills in.
 
 The dashboard's **Setup** tab shows this snippet with your real URL filled in.
+
+### Keep sending to WakaTime too (optional)
+
+Your editor can only send to one server, so Waqt can forward every heartbeat to WakaTime for you. In Cloudflare open your Worker → **Settings → Variables and Secrets → Add**, choose **Secret**, name it `WAKATIME_API_KEY` and paste your key from [wakatime.com/api-key](https://wakatime.com/api-key).
+
+Waqt sends the heartbeats exactly as your editor sent them (AI fields, dependencies, user agent, machine name and time zone included), in the background, so your editor never waits on WakaTime. The dashboard's **Setup** tab shows whether forwarding is working. To forward to another WakaTime-compatible server (Wakapi, Hackatime…) instead, also add a `WAKATIME_API_URL` variable such as `https://wakapi.dev/api`.
 
 ## Add stats to your GitHub README
 
@@ -159,6 +166,7 @@ Time is counted the way WakaTime counts it: each heartbeat gets credit for the g
 | `src/ingest.ts` | validates and stores heartbeats |
 | `src/summaries.ts` | turns heartbeats into daily totals, pruning |
 | `src/stats.ts` | stats queries and the public cache |
+| `src/forward.ts` | optional forwarding to WakaTime |
 | `public/` | dashboard and profile page (plain HTML/JS, no build step) |
 | `migrations/` | D1 schema |
 

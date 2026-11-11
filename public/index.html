@@ -159,7 +159,9 @@
           <div class="panel">
             <div class="panel-head"><h2>Status</h2></div>
             <dl class="kv" id="status"></dl>
-            <p class="faint" style="font-size:12.5px;margin-bottom:0">Raw activity is kept for your retention window; daily totals are kept forever, so your full history stays. Everything lives in your own Cloudflare account.</p>
+            <p class="faint" style="font-size:12.5px">Raw activity is kept for your retention window; daily totals are kept forever, so your full history stays. Everything lives in your own Cloudflare account.</p>
+            <h3 style="font-size:13px;margin:18px 0 6px">Keep WakaTime too (optional)</h3>
+            <p class="muted" style="margin:0;font-size:13px">Your editor can only send to one server, so Waqt can pass every heartbeat on to WakaTime for you. In Cloudflare, open this Worker → <b>Settings → Variables and Secrets → Add</b>, choose <b>Secret</b>, name it <code>WAKATIME_API_KEY</code> and paste your key from <a href="https://wakatime.com/api-key" target="_blank" rel="noopener">wakatime.com/api-key</a>. New activity then goes to both.</p>
           </div>
         </div>
       </section>

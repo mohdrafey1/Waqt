@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { type C, type AppEnv, cors, requireAuth, viewFor, withSettings } from '../http';
+import { forwardHeartbeats, forwardHost, forwardingEnabled } from '../forward';
 import { MAX_BATCH, ingest } from '../ingest';
 import { loadSettings, publicSettingsView, saveSettings, tzOf } from '../settings';
 import { clearCache, getStats } from '../stats';
@@ -27,11 +28,15 @@ async function handleHeartbeats(c: C) {
   }
   const items = Array.isArray(body) ? body : [body];
   if (items.length > MAX_BATCH) return c.json({ error: `At most ${MAX_BATCH} heartbeats per request` }, 400);
-  const result = await ingest(c.env, c.get('settings'), items, {
+  const headers = {
     machine: c.req.header('X-Machine-Name') || '',
     ua: c.req.header('User-Agent') || '',
     tz: c.req.header('Timezone') || c.req.header('TimeZone') || '',
-  });
+  };
+  const s = c.get('settings');
+  const result = await ingest(c.env, s, items, headers);
+  // Pass the original heartbeats on to WakaTime in the background, if enabled.
+  if (forwardingEnabled(c.env)) c.executionCtx.waitUntil(forwardHeartbeats(c.env, s, items, headers));
   if (!Array.isArray(body)) {
     const [data, status] = result.responses[0];
     return c.json(data as object, status === 201 ? 201 : 400);
@@ -223,7 +228,14 @@ api.get('/users/current/settings', requireAuth, async (c) => {
             (SELECT COUNT(*) FROM dirty_days) AS pending_days,
             (SELECT MAX(time) FROM heartbeats) AS last_heartbeat`,
   ).first<{ heartbeats: number; first_day: string | null; pending_days: number; last_heartbeat: number | null }>();
-  return c.json({ data: { ...publicSettingsView(s), effective_timezone: tzOf(s), stats: counts } });
+  return c.json({
+    data: {
+      ...publicSettingsView(s),
+      effective_timezone: tzOf(s),
+      stats: counts,
+      forwarding: forwardingEnabled(c.env) ? { to: forwardHost(c.env), error: s.forward_error } : null,
+    },
+  });
 });
 
 api.put('/users/current/settings', requireAuth, async (c) => {
