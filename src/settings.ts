@@ -49,6 +49,7 @@ export interface Settings {
   last_week_goal_nudge: string;
   last_streak_nudge: string;
   statusbar_goal: boolean; // show daily goal progress in the editor status bar
+  password_set: boolean; // a dashboard password exists (the hash itself never leaves auth.ts)
 }
 
 export const DEFAULTS: Record<string, string> = {
@@ -88,6 +89,7 @@ export const DEFAULTS: Record<string, string> = {
   last_week_goal_nudge: '',
   last_streak_nudge: '',
   statusbar_goal: '0',
+  dashboard_password: '',
 };
 
 function obj<T>(json: string, check: (v: unknown) => v is T): Record<string, T> {
@@ -149,6 +151,7 @@ function parse(raw: Record<string, string>): Settings {
     last_week_goal_nudge: v.last_week_goal_nudge,
     last_streak_nudge: v.last_streak_nudge,
     statusbar_goal: v.statusbar_goal === '1',
+    password_set: !!v.dashboard_password,
   };
 }
 
@@ -214,6 +217,7 @@ export function publicSettingsView(s: Settings) {
     nudge_streak: s.nudge_streak,
     nudge_streak_hour: s.nudge_streak_hour,
     statusbar_goal: s.statusbar_goal,
+    password_set: s.password_set,
   };
 }
 

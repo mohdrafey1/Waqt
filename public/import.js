@@ -71,9 +71,9 @@ async function readWithProgress(res, onProgress) {
 }
 
 /**
- * @param {{ api: Function, authHeader: string, file?: File, onStatus: (msg: string, pct?: number) => void }} opts
+ * @param {{ api: Function, headers?: Record<string, string>, file?: File, onStatus: (msg: string, pct?: number) => void }} opts
  */
-export async function runImport({ api, authHeader, file, onStatus }) {
+export async function runImport({ api, headers = {}, file, onStatus }) {
   const status = (await api('/users/current/import/status')).data;
   let text;
   if (file) {
@@ -90,7 +90,7 @@ export async function runImport({ api, authHeader, file, onStatus }) {
       await sleep(5000);
     }
     onStatus('Downloading your export…', 30);
-    const res = await fetch('/api/v1/users/current/import/wakatime/download', { headers: { Authorization: authHeader } });
+    const res = await fetch('/api/v1/users/current/import/wakatime/download', { headers, credentials: 'same-origin' });
     if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || `Download failed (${res.status})`);
     text = await readWithProgress(res, (got, total) => {
       const mb = (got / 1048576).toFixed(1);

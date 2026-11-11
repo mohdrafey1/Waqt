@@ -5,7 +5,7 @@ import { LOGO, addDays, barList, compact, copy, dailyBars, esc, fmt, heatmap, ho
 const $ = (s) => document.querySelector(s);
 const origin = location.origin;
 const host = location.host;
-let key = '';
+let newKey = ''; // a device key just created in Setup (shown once)
 let settings = null;
 
 function store(k, v) {
@@ -17,10 +17,13 @@ function store(k, v) {
   return null;
 }
 
+// Signed in with an HttpOnly session cookie; X-Waqt proves the request comes from this page.
+const AUTH_HEADERS = { 'X-Waqt': '1' };
 async function api(path, opts = {}) {
   const res = await fetch('/api/v1' + path, {
     ...opts,
-    headers: { Authorization: 'Bearer ' + key, 'Content-Type': 'application/json', ...(opts.headers || {}) },
+    credentials: 'same-origin',
+    headers: { ...AUTH_HEADERS, 'Content-Type': 'application/json', ...(opts.headers || {}) },
   });
   const body = await res.json().catch(() => ({}));
   if (!res.ok) {
@@ -35,27 +38,33 @@ async function api(path, opts = {}) {
 $('#login-logo').innerHTML = LOGO + '<span>Waqt</span>';
 $('#app-logo').innerHTML = LOGO + '<span>Waqt</span>';
 
-async function tryLogin(k) {
-  key = k.trim().toLowerCase();
+async function loadSettings() {
   try {
     settings = (await api('/users/current/settings')).data;
     return true;
   } catch (e) {
-    $('#login-err').textContent = e.status === 401 ? 'That key does not match this Waqt instance.' : e.message;
-    return false;
+    if (e.status === 401 || e.status === 403) return false;
+    throw e;
   }
+}
+
+async function signIn(secret) {
+  await api('/auth/login', { method: 'POST', body: JSON.stringify({ secret }) });
+  return loadSettings();
 }
 
 $('#login-form').addEventListener('submit', async (e) => {
   e.preventDefault();
-  if (await tryLogin($('#login-key').value)) {
-    store('waqt_key', key);
-    start();
+  $('#login-err').textContent = '';
+  try {
+    if (await signIn($('#login-key').value)) start();
+  } catch (err) {
+    $('#login-err').textContent = err.message;
   }
 });
 
-$('#logout').onclick = () => {
-  store('waqt_key', null);
+$('#logout').onclick = async () => {
+  await api('/auth/logout', { method: 'POST' }).catch(() => {});
   location.reload();
 };
 
@@ -604,13 +613,11 @@ jobs:
 ['#c-kind', '#c-range', '#c-theme', '#c-layout', '#c-count'].forEach((s) => $(s).addEventListener('change', renderShare));
 
 // ---------- setup ----------
-let revealed = false;
 function renderSetup() {
-  const shown = revealed ? key : key.slice(0, 8) + '-••••-••••-••••-••••••••••••';
   const cfg = (k) => `[settings]\napi_url = ${origin}/api/v1\napi_key = ${k}`;
-  $('#cfg').innerHTML = `${esc(cfg(shown))}<button class="btn small copy" type="button">Copy</button>`;
-  $('#cfg .copy').onclick = () => copy(cfg(key));
-  $('#reveal').textContent = revealed ? 'Hide key' : 'Show key';
+  const shown = newKey || '<create a key below, or use your API_KEY>';
+  $('#cfg').innerHTML = `${esc(cfg(shown))}${newKey ? '<button class="btn small copy" type="button">Copy</button>' : ''}`;
+  if (newKey) $('#cfg .copy').onclick = () => copy(cfg(newKey));
   const s = settings.stats || {};
   const last = s.last_heartbeat ? new Date(s.last_heartbeat * 1000) : null;
   $('#status').innerHTML = `
@@ -735,7 +742,7 @@ async function startImport(file) {
     if (pct != null) $('#import-bar').style.width = Math.min(100, pct) + '%';
   };
   try {
-    const r = await runImport({ api, authHeader: 'Bearer ' + key, file, onStatus: set });
+    const r = await runImport({ api, headers: AUTH_HEADERS, file, onStatus: set });
     set(`Done: imported ${r.days} days (${fmt(r.seconds)}), ${prettyDate(r.first, { year: 'numeric', month: 'short', day: 'numeric' })} to ${prettyDate(r.last, { year: 'numeric', month: 'short', day: 'numeric' })}.`, 100);
     toast('Import finished');
   } catch (e) {
@@ -822,9 +829,90 @@ $('#backup-file').onchange = async (e) => {
   }
 };
 
-$('#reveal').onclick = () => {
-  revealed = !revealed;
-  renderSetup();
+$('#newkey').onclick = async () => {
+  try {
+    const { data } = await api('/users/current/keys', { method: 'POST', body: JSON.stringify({ name: $('#newkey-name').value.trim() || guessDevice() }) });
+    newKey = data.key;
+    $('#newkey-name').value = '';
+    $('#newkey-hint').innerHTML = `<b>Copy it now:</b> Waqt only keeps a fingerprint of “${esc(data.name)}”, so this key can't be shown again. You can revoke it any time in Settings.`;
+    renderSetup();
+  } catch (e) {
+    toast(e.message);
+  }
+};
+function guessDevice() {
+  const ua = navigator.userAgent;
+  return /Mac/.test(ua) ? 'Mac' : /Windows/.test(ua) ? 'Windows PC' : /Linux/.test(ua) ? 'Linux machine' : 'Device';
+}
+
+// ---------- sign-in and device keys ----------
+const when = (t) => (t ? new Date(t * 1000).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : '—');
+async function renderSecurity() {
+  $('#pw-state').textContent = settings.password_set
+    ? 'A password is set. You can sign in with it or with your main key. Changing it signs out every other browser.'
+    : 'No password yet: you sign in with your main key. Set one so you never need to paste the key into a browser.';
+  $('#pw-save').textContent = settings.password_set ? 'Change password' : 'Set password';
+  $('#pw-remove').classList.toggle('hidden', !settings.password_set);
+  try {
+    const [{ data: keys }, { data: sessions }] = await Promise.all([api('/users/current/keys'), api('/users/current/sessions')]);
+    $('#keys-table tbody').innerHTML = keys.length
+      ? keys
+          .map(
+            (k) => `<tr class="${k.revoked_at ? 'faint' : ''}"><td>${esc(k.name)}</td><td><code>••••${esc(k.hint)}</code></td><td>${when(k.created_at)}</td><td>${k.revoked_at ? 'revoked ' + when(k.revoked_at) : when(k.last_used)}</td>
+              <td style="text-align:right">${k.revoked_at ? '' : `<button class="btn small key-revoke" data-id="${k.id}" data-name="${esc(k.name)}" type="button">Revoke</button>`}</td></tr>`,
+          )
+          .join('')
+      : '<tr><td colspan="5" class="empty">No device keys yet. Create one in Setup.</td></tr>';
+    document.querySelectorAll('.key-revoke').forEach(
+      (b) =>
+        (b.onclick = async () => {
+          if (!window.confirm(`Revoke “${b.dataset.name}”? Editors using it stop sending activity.`)) return;
+          await api('/users/current/keys/' + b.dataset.id, { method: 'DELETE' });
+          toast('Key revoked');
+          renderSecurity();
+        }),
+    );
+    $('#sessions').innerHTML = sessions.length
+      ? `<table class="table"><tbody>${sessions
+          .map((x) => `<tr><td>${esc(browserName(x.user_agent))}${x.current ? ' <span class="faint">(this browser)</span>' : ''}</td><td>signed in ${when(x.created_at)}</td><td>last seen ${when(x.last_seen)}</td></tr>`)
+          .join('')}</tbody></table>`
+      : '<div class="empty">Only API keys are in use.</div>';
+    $('#sessions-end').classList.toggle('hidden', sessions.filter((x) => !x.current).length === 0);
+  } catch (e) {
+    $('#pw-err').textContent = e.message;
+  }
+}
+function browserName(ua) {
+  const b = /Edg\//.test(ua) ? 'Edge' : /Chrome\//.test(ua) ? 'Chrome' : /Firefox\//.test(ua) ? 'Firefox' : /Safari\//.test(ua) ? 'Safari' : 'Browser';
+  const os = /iPhone|iPad/.test(ua) ? 'iOS' : /Android/.test(ua) ? 'Android' : /Mac/.test(ua) ? 'macOS' : /Windows/.test(ua) ? 'Windows' : /Linux/.test(ua) ? 'Linux' : '';
+  return os ? `${b} on ${os}` : b;
+}
+$('#pw-save').onclick = async () => {
+  $('#pw-err').textContent = '';
+  const pw = $('#pw-new').value;
+  if (pw.length < 10) return ($('#pw-err').textContent = 'Use at least 10 characters.');
+  if (pw !== $('#pw-again').value) return ($('#pw-err').textContent = "The two passwords don't match.");
+  try {
+    await api('/users/current/password', { method: 'PUT', body: JSON.stringify({ password: pw }) });
+    $('#pw-new').value = $('#pw-again').value = '';
+    settings.password_set = true;
+    toast('Password saved');
+    renderSecurity();
+  } catch (e) {
+    $('#pw-err').textContent = e.message;
+  }
+};
+$('#pw-remove').onclick = async () => {
+  if (!window.confirm('Remove the dashboard password? You will sign in with your main key instead.')) return;
+  await api('/users/current/password', { method: 'DELETE' });
+  settings.password_set = false;
+  toast('Password removed');
+  renderSecurity();
+};
+$('#sessions-end').onclick = async () => {
+  const { data } = await api('/users/current/sessions', { method: 'DELETE' });
+  toast(`Signed out ${data.signed_out} other browser${data.signed_out === 1 ? '' : 's'}`);
+  renderSecurity();
 };
 
 // ---------- settings ----------
@@ -866,6 +954,7 @@ function renderSettings() {
   $('#s-tg-chat').value = settings.report_telegram_chat || '';
   $('#s-report-result').textContent = '';
   $('#s-err').textContent = '';
+  renderSecurity();
 }
 
 async function saveSettingsForm() {
@@ -940,8 +1029,21 @@ function start() {
 }
 
 (async () => {
-  const saved = store('waqt_key');
-  if (saved && (await tryLogin(saved))) return start();
-  $('#login-err').textContent = '';
+  try {
+    if (await loadSettings()) return start();
+    // Older versions kept the key in this browser; trade it for a session once.
+    const saved = store('waqt_key');
+    if (saved) {
+      store('waqt_key', null);
+      if (await signIn(saved).catch(() => false)) return start();
+    }
+    const { data } = await api('/auth/status');
+    if (data.password_set) {
+      $('#login-hint').innerHTML = 'Use your dashboard password, or the API key you set as the <code>API_KEY</code> secret.';
+      $('#login-key').placeholder = 'Password or API key';
+    }
+  } catch (e) {
+    $('#login-err').textContent = e.message;
+  }
   $('#login').classList.remove('hidden');
 })();

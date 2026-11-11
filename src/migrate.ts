@@ -12,6 +12,7 @@ import m0003 from '../migrations/0003_repair_plugin_quirks.sql';
 import m0004 from '../migrations/0004_user_agents.sql';
 import m0005 from '../migrations/0005_usage.sql';
 import m0006 from '../migrations/0006_files.sql';
+import m0007 from '../migrations/0007_auth.sql';
 
 const MIGRATIONS: [string, string][] = [
   ['0001_init.sql', m0001],
@@ -20,6 +21,7 @@ const MIGRATIONS: [string, string][] = [
   ['0004_user_agents.sql', m0004],
   ['0005_usage.sql', m0005],
   ['0006_files.sql', m0006],
+  ['0007_auth.sql', m0007],
 ];
 
 let checked = false;

@@ -1,46 +1,25 @@
 import type { Context, MiddlewareHandler } from 'hono';
+import { type Auth, isKeyShaped, resolveAuth } from './auth';
 import { ensureMigrated } from './migrate';
 import { Env, Settings, loadSettings } from './settings';
 import type { View } from './stats';
 
-export type Vars = { settings: Settings };
+export type Vars = { settings: Settings; auth?: Auth };
 export type AppEnv = { Bindings: Env; Variables: Vars };
 export type C = Context<AppEnv>;
 
-const KEY_RE = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
-
 export function configuredKey(env: Env): string | null {
   const k = (env.API_KEY || '').trim().toLowerCase().replace(/^waka_/, '');
-  return KEY_RE.test(k) ? k : null;
+  return isKeyShaped(k) ? k : null;
 }
 
-function presentedKeys(c: C): string[] {
-  const out: string[] = [];
-  const h = c.req.header('Authorization') || '';
-  if (/^basic /i.test(h)) {
-    try {
-      const decoded = atob(h.slice(6).trim());
-      out.push(decoded, ...decoded.split(':'));
-    } catch {}
-  } else if (/^bearer /i.test(h)) {
-    out.push(h.slice(7).trim());
-  }
-  const q = c.req.query('api_key');
-  if (q) out.push(q);
-  return out.map((k) => k.trim().toLowerCase().replace(/^waka_/, '')).filter(Boolean);
-}
-
-function safeEqual(a: string, b: string): boolean {
-  const x = new TextEncoder().encode(a);
-  const y = new TextEncoder().encode(b);
-  if (x.byteLength !== y.byteLength) return false;
-  return crypto.subtle.timingSafeEqual(x, y);
-}
-
-export function isAuthed(c: C): boolean {
-  const key = configuredKey(c.env);
-  if (!key) return false;
-  return presentedKeys(c).some((k) => safeEqual(k, key));
+/** Owner (main key or dashboard session), device (per-editor key), or nobody. Cached per request. */
+export async function authOf(c: C): Promise<Auth> {
+  const cached = c.get('auth');
+  if (cached !== undefined) return cached;
+  const a = await resolveAuth(c, c.env, configuredKey(c.env));
+  c.set('auth', a);
+  return a;
 }
 
 export const withSettings: MiddlewareHandler<AppEnv> = async (c, next) => {
@@ -63,7 +42,16 @@ export const requireAuth: MiddlewareHandler<AppEnv> = async (c, next) => {
       500,
     );
   }
-  if (!isAuthed(c)) return c.json({ error: 'Unauthorized' }, 401);
+  const a = await authOf(c);
+  if (a === 'device') return c.json({ error: 'This key can only send activity. Sign in to the dashboard or use the main key.' }, 403);
+  if (a !== 'owner') return c.json({ error: 'Unauthorized' }, 401);
+  await next();
+};
+
+/** The WakaTime-compatible endpoints editors use: any valid key or a session. */
+export const requireDevice: MiddlewareHandler<AppEnv> = async (c, next) => {
+  if (!configuredKey(c.env)) return c.json({ error: 'API_KEY secret is missing or is not a lowercase UUID v4.' }, 500);
+  if (!(await authOf(c))) return c.json({ error: 'Unauthorized' }, 401);
   await next();
 };
 
@@ -74,9 +62,9 @@ export function cors(c: C) {
 }
 
 /** "current" needs the key and gets everything; any other username gets the public view. */
-export function viewFor(c: C): View | 'denied' | 'unauthorized' {
+export async function viewFor(c: C): Promise<View | 'denied' | 'unauthorized'> {
   const user = c.req.param('user');
-  if (user === 'current') return isAuthed(c) ? 'private' : 'unauthorized';
+  if (user === 'current') return (await authOf(c)) ? 'private' : 'unauthorized';
   return c.get('settings').public_enabled ? 'public' : 'denied';
 }
 

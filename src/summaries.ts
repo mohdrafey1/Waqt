@@ -182,5 +182,6 @@ export async function pruneRaw(env: Env, s: Settings): Promise<void> {
       PRUNE_BATCH,
     ),
     env.DB.prepare('DELETE FROM cache WHERE expires < ?1').bind(Math.floor(Date.now() / 1000)),
+    env.DB.prepare('DELETE FROM sessions WHERE expires_at < ?1').bind(Math.floor(Date.now() / 1000)),
   ]);
 }

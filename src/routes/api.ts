@@ -1,9 +1,10 @@
 import { Hono } from 'hono';
-import { type C, type AppEnv, cors, requireAuth, viewFor, withSettings } from '../http';
+import { type C, type AppEnv, cors, requireAuth, requireDevice, viewFor, withSettings } from '../http';
 import { forwardHeartbeats, forwardHost, forwardKey, forwardQueueSize, forwardingEnabled } from '../forward';
 import { MAX_BATCH, ingest } from '../ingest';
 import { importer } from './importer';
 import { backup } from './backup';
+import { account, auth } from './auth';
 import { buildReport, sendReport } from '../report';
 import { reparseUserAgents } from '../maintenance';
 import { usageReport } from '../usage';
@@ -51,11 +52,11 @@ async function handleHeartbeats(c: C) {
   return c.json(result, 202);
 }
 
-api.post('/users/current/heartbeats.bulk', requireAuth, handleHeartbeats);
-api.post('/users/current/heartbeats', requireAuth, handleHeartbeats);
+api.post('/users/current/heartbeats.bulk', requireDevice, handleHeartbeats);
+api.post('/users/current/heartbeats', requireDevice, handleHeartbeats);
 
 // Editor status bar ("Today: 2 hrs 10 mins")
-api.get('/users/current/statusbar/today', requireAuth, async (c) => {
+api.get('/users/current/statusbar/today', requireDevice, async (c) => {
   const s = c.get('settings');
   const tz = tzOf(s);
   const today = todayIn(tz);
@@ -101,7 +102,7 @@ api.get('/users/current/statusbar/today', requireAuth, async (c) => {
   });
 });
 
-api.get('/users/current', requireAuth, (c) => {
+api.get('/users/current', requireDevice, (c) => {
   const s = c.get('settings');
   return c.json({
     data: {
@@ -117,10 +118,10 @@ api.get('/users/current', requireAuth, (c) => {
   });
 });
 
-api.post('/users/current/file_experts', requireAuth, (c) => c.json({ data: [] }));
+api.post('/users/current/file_experts', requireDevice, (c) => c.json({ data: [] }));
 
 async function handleStats(c: C) {
-  const view = viewFor(c);
+  const view = await viewFor(c);
   if (view === 'unauthorized') return c.json({ error: 'Unauthorized' }, 401);
   if (view === 'denied') return c.json({ error: 'This profile is private' }, 403);
   const range = c.req.param('range') || c.req.query('range') || 'last_7_days';
@@ -140,7 +141,7 @@ api.get('/users/:user/stats', handleStats);
 
 // Markdown block for profile READMEs (see readme-action/).
 api.get('/users/:user/readme.md', async (c) => {
-  const view = viewFor(c);
+  const view = await viewFor(c);
   if (view === 'unauthorized') return c.text('Unauthorized', 401);
   if (view === 'denied') return c.text('This profile is private', 403);
   const s = c.get('settings');
@@ -155,7 +156,7 @@ api.get('/users/:user/readme.md', async (c) => {
 });
 
 api.get('/users/:user/all_time_since_today', async (c) => {
-  const view = viewFor(c);
+  const view = await viewFor(c);
   if (view === 'unauthorized') return c.json({ error: 'Unauthorized' }, 401);
   if (view === 'denied') return c.json({ error: 'This profile is private' }, 403);
   const st = await getStats(c.env, c.get('settings'), { range: 'all_time', view });
@@ -175,7 +176,7 @@ api.get('/users/:user/all_time_since_today', async (c) => {
 });
 
 // Per-day summaries, like WakaTime's /summaries (max 366 days per request)
-api.get('/users/current/summaries', requireAuth, async (c) => {
+api.get('/users/current/summaries', requireDevice, async (c) => {
   const s = c.get('settings');
   const tz = tzOf(s);
   const today = todayIn(tz);
@@ -537,3 +538,5 @@ api.put('/users/current/settings', requireAuth, async (c) => {
 
 api.route('/users/current/import', importer);
 api.route('/users/current/backup', backup);
+api.route('/users/current', account);
+api.route('/auth', auth);

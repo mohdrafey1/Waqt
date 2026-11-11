@@ -14,7 +14,7 @@
     <div class="panel">
       <span class="logo" id="login-logo"></span>
       <h1>Sign in to your dashboard</h1>
-      <p class="muted" style="margin:0">Use the API key you set as the <code>API_KEY</code> secret when you deployed.</p>
+      <p class="muted" style="margin:0" id="login-hint">Use the API key you set as the <code>API_KEY</code> secret when you deployed.</p>
       <form id="login-form">
         <input id="login-key" type="password" placeholder="xxxxxxxx-xxxx-4xxx-xxxx-xxxxxxxxxxxx" autocomplete="current-password" required>
         <button class="btn primary" type="submit">Open dashboard</button>
@@ -287,7 +287,11 @@
               <li>Install the free WakaTime plugin for your editor from <a href="https://wakatime.com/plugins" target="_blank" rel="noopener">wakatime.com/plugins</a> (VS Code, Cursor, JetBrains, Vim, Neovim, Sublime, Xcode, terminals, browsers and more). You don't need a WakaTime account.</li>
               <li>Put this in <code>~/.wakatime.cfg</code> (on Windows: <code>%USERPROFILE%\.wakatime.cfg</code>):
                 <div class="code" id="cfg" style="margin-top:8px"></div>
-                <button class="btn small" id="reveal" style="margin-top:8px">Show key</button>
+                <div class="row" style="margin-top:8px">
+                  <input type="text" id="newkey-name" maxlength="60" placeholder="Name this device, e.g. Work laptop" style="flex:1;min-width:180px">
+                  <button class="btn small primary" id="newkey" type="button">Create a key for this device</button>
+                </div>
+                <p class="hint" id="newkey-hint" style="margin:8px 0 0">Each device gets its own key that can only send activity and read your stats, and you can revoke it in Settings. Your main key (the <code>API_KEY</code> secret) works too.</p>
               </li>
               <li>Restart your editor and code for a couple of minutes. Your status bar shows today's time, and this dashboard fills in.</li>
             </ol>
@@ -400,6 +404,25 @@
 
           <div class="row"><button class="btn primary" type="submit">Save settings</button><span class="err" id="s-err"></span></div>
         </form>
+
+        <div class="panel section" id="security" style="max-width:720px">
+          <div class="panel-head"><h2>Sign-in and device keys</h2></div>
+          <h3 class="form-h" style="margin-top:0">Dashboard password</h3>
+          <p class="hint" style="margin:-6px 0 12px" id="pw-state"></p>
+          <div class="grid two" style="gap:0 16px">
+            <div class="field"><label for="pw-new">New password</label><input id="pw-new" type="password" autocomplete="new-password" minlength="10" placeholder="At least 10 characters"></div>
+            <div class="field"><label for="pw-again">Repeat it</label><input id="pw-again" type="password" autocomplete="new-password"></div>
+          </div>
+          <div class="row"><button class="btn primary" id="pw-save" type="button">Set password</button><button class="btn hidden" id="pw-remove" type="button">Remove password</button><span class="err" id="pw-err"></span></div>
+
+          <h3 class="form-h">Device keys</h3>
+          <p class="hint" style="margin:-6px 0 12px">Keys for your editors. They can send activity and read stats, but can't open this dashboard or change anything. Create one from Setup.</p>
+          <div style="overflow-x:auto"><table class="table" id="keys-table"><thead><tr><th>Name</th><th>Key</th><th>Created</th><th>Last used</th><th></th></tr></thead><tbody></tbody></table></div>
+
+          <h3 class="form-h">Signed-in browsers</h3>
+          <div id="sessions"></div>
+          <div class="row" style="margin-top:10px"><button class="btn" id="sessions-end" type="button">Sign out other browsers</button></div>
+        </div>
       </section>
     </main>
   </div>
