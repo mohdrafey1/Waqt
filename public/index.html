@@ -33,6 +33,7 @@
           <button class="tab" data-tab="ai">AI</button>
           <button class="tab" data-tab="projects">Projects</button>
           <button class="tab" data-tab="timesheets">Timesheets</button>
+          <button class="tab" data-tab="friends">Friends</button>
           <button class="tab" data-tab="share">Share</button>
           <button class="tab" data-tab="setup">Setup</button>
           <button class="tab" data-tab="settings">Settings</button>
@@ -153,6 +154,27 @@
           </div>
           <datalist id="label-options"></datalist>
           <div class="row" style="margin-top:14px"><button class="btn primary" id="proj-save" type="button">Save changes</button><span class="err" id="proj-err"></span></div>
+        </div>
+      </section>
+
+      <!-- Friends -->
+      <section data-view="friends" class="hidden">
+        <div class="panel" style="margin-top:22px">
+          <div class="panel-head"><h2>Leaderboard</h2>
+            <select id="fr-range" aria-label="Leaderboard range"><option value="last_7_days">Last 7 days</option><option value="last_30_days">Last 30 days</option></select>
+          </div>
+          <div id="fr-board"></div>
+          <p class="faint" style="font-size:12.5px;margin-bottom:0">Only you see this. Friends' numbers come from their public stats and refresh every 10 minutes.</p>
+        </div>
+        <div class="panel section">
+          <div class="panel-head"><h2>Your friends</h2><span class="muted" id="fr-count"></span></div>
+          <p class="muted" style="margin-top:0">Add anyone with a public Waqt (their address, e.g. <code>https://waqt.example.com</code>) or a WakaTime profile with public stats (e.g. <code>https://wakatime.com/@name</code>). To be on their board, send them <b id="fr-you"></b> and keep <i>Public profile and cards</i> on in Settings.</p>
+          <div id="fr-list" style="display:grid;gap:8px"></div>
+          <div class="row" style="margin-top:12px">
+            <button class="btn" id="fr-add" type="button">Add a friend</button>
+            <button class="btn primary" id="fr-save" type="button">Save friends</button>
+            <span class="err" id="fr-err"></span>
+          </div>
         </div>
       </section>
 

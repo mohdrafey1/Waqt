@@ -247,3 +247,9 @@ input[type='date'] { background: var(--panel-2); color: var(--text); border: 1px
 
 #price-table input { width: 100%; min-width: 70px; }
 #price-table td.num input { text-align: right; max-width: 110px; }
+
+.board td.rank { width: 36px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.board tr.you td { font-weight: 600; }
+.board .meter-cell { width: 34%; min-width: 120px; }
+.board .meter-cell div { height: 8px; border-radius: 4px; background: var(--accent); }
+.fr-row { display: grid; grid-template-columns: minmax(120px, 1fr) minmax(200px, 2.4fr) auto; gap: 8px; }

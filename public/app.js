@@ -79,6 +79,7 @@ function showTab(name) {
   history.replaceState(null, '', name === 'overview' ? '#' : '#' + name);
   if (name === 'share') renderShare();
   if (name === 'projects') renderProjects();
+  if (name === 'friends') renderFriends();
   if (name === 'ai') loadAi();
   if (name === 'timesheets') loadTimesheet();
   if (name === 'setup') {
@@ -292,6 +293,79 @@ function drawProjects() {
   document.querySelectorAll('.p-open').forEach((b) => (b.onclick = () => openProject(b.dataset.shown)));
 }
 $('#proj-filter').addEventListener('input', drawProjects);
+
+// ---------- friends ----------
+let friends = null; // list being edited
+async function renderFriends() {
+  if (!friends) friends = (settings.friends || []).map((f) => ({ ...f }));
+  $('#fr-you').textContent = location.origin;
+  drawFriendList();
+  $('#fr-board').innerHTML = '<div class="empty">Loading…</div>';
+  try {
+    const { data } = await api(`/users/current/friends?range=${$('#fr-range').value}`);
+    const max = Math.max(1, ...data.rows.map((r) => r.total_seconds));
+    let rank = 0;
+    $('#fr-board').innerHTML = `<table class="table board"><tbody>${data.rows
+      .map((r) => {
+        if (r.ok) rank++;
+        const name = r.source === 'you' ? `${esc(r.name)} <span class="faint">(you)</span>` : `<a href="${esc(r.profile)}" target="_blank" rel="noopener">${esc(r.name)}</a>`;
+        return `<tr class="${r.source === 'you' ? 'you' : ''}">
+          <td class="rank">${r.ok ? rank : '–'}</td>
+          <td>${name}${r.source === 'wakatime' ? ' <span class="faint">WakaTime</span>' : ''}</td>
+          <td class="meter-cell">${r.ok ? `<div style="width:${Math.max(1, (r.total_seconds / max) * 100)}%"></div>` : `<span class="faint">${esc(r.error || '')}</span>`}</td>
+          <td class="num">${r.ok ? esc(fmt(r.total_seconds)) : ''}</td>
+          <td class="num muted">${r.ok && r.daily_average ? esc(fmt(r.daily_average)) + '/day' : ''}</td>
+          <td class="muted">${esc(r.languages.join(', '))}</td>
+        </tr>`;
+      })
+      .join('')}</tbody></table>${data.rows.length === 1 ? '<div class="empty">Add friends below to compare.</div>' : ''}`;
+  } catch (e) {
+    $('#fr-board').innerHTML = `<div class="err">${esc(e.message)}</div>`;
+  }
+}
+function drawFriendList() {
+  $('#fr-count').textContent = `${friends.length} of 25`;
+  $('#fr-list').innerHTML = friends.length
+    ? friends
+        .map(
+          (f, i) => `<div class="fr-row" data-i="${i}">
+            <input type="text" class="fr-name" maxlength="40" placeholder="Name" value="${esc(f.name)}">
+            <input type="text" inputmode="url" class="fr-url" placeholder="https://waqt.example.com or https://wakatime.com/@name" value="${esc(f.url)}">
+            <button class="btn small fr-del" type="button" title="Remove">✕</button>
+          </div>`,
+        )
+        .join('')
+    : '<div class="empty">No friends added yet.</div>';
+  document.querySelectorAll('.fr-row').forEach((row) => {
+    const i = Number(row.dataset.i);
+    row.querySelector('.fr-name').oninput = (e) => (friends[i].name = e.target.value);
+    row.querySelector('.fr-url').oninput = (e) => (friends[i].url = e.target.value);
+    row.querySelector('.fr-del').onclick = () => {
+      friends.splice(i, 1);
+      drawFriendList();
+    };
+  });
+}
+$('#fr-add').onclick = () => {
+  if (friends.length >= 25) return;
+  friends.push({ name: '', url: '' });
+  drawFriendList();
+  document.querySelector('.fr-row:last-child .fr-name').focus();
+};
+$('#fr-save').onclick = async () => {
+  $('#fr-err').textContent = '';
+  try {
+    const list = friends.filter((f) => f.url.trim());
+    const { data } = await api('/users/current/settings', { method: 'PUT', body: JSON.stringify({ friends: list }) });
+    settings = { ...settings, ...data };
+    friends = null;
+    toast('Friends saved');
+    renderFriends();
+  } catch (e) {
+    $('#fr-err').textContent = e.message;
+  }
+};
+$('#fr-range').onchange = renderFriends;
 
 // ---------- one project in detail ----------
 let openedProject = null;
@@ -1022,7 +1096,7 @@ function start() {
   const r = store('waqt_range');
   if (r && [...$('#range').options].some((o) => o.value === r)) $('#range').value = r;
   const tab = location.hash.slice(1);
-  showTab(['ai', 'projects', 'timesheets', 'share', 'setup', 'settings'].includes(tab) ? tab : 'overview');
+  showTab(['ai', 'projects', 'timesheets', 'friends', 'share', 'setup', 'settings'].includes(tab) ? tab : 'overview');
   loadOverview().catch((e) => {
     $('#notice').innerHTML = `<div class="banner">${esc(e.message)}</div>`;
   });

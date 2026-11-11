@@ -9,6 +9,7 @@ import { buildReport, sendReport } from '../report';
 import { reparseUserAgents } from '../maintenance';
 import { usageReport } from '../usage';
 import { cleanPrices } from '../pricing';
+import { FRIEND_RANGES, MAX_FRIENDS, cleanFriends, leaderboard } from '../friends';
 import { aliasOf, loadSettings, publicSettingsView, saveSettings, tzOf } from '../settings';
 import { clearCache, getStats, streaks } from '../stats';
 import { README_SECTIONS, renderReadme } from '../readme';
@@ -353,6 +354,17 @@ api.get('/users/current/projects', requireAuth, async (c) => {
   });
 });
 
+// Leaderboard with friends (their public stats), you included.
+api.get('/users/current/friends', requireAuth, async (c) => {
+  const s = c.get('settings');
+  const range = c.req.query('range') || 'last_7_days';
+  if (!(FRIEND_RANGES as readonly string[]).includes(range)) return c.json({ error: `range must be one of ${FRIEND_RANGES.join(', ')}` }, 400);
+  const st = await getStats(c.env, s, { range, view: 'private' });
+  const you = { name: s.display_name || 'You', total_seconds: st?.total_seconds || 0, daily_average: st?.daily_average || 0, languages: st?.languages || [] };
+  const rows = await leaderboard(c.env.DB, s.friends, range, you, new URL(c.req.url).origin);
+  return c.json({ data: { range, rows } });
+});
+
 // One project in detail: daily time, languages, branches and files.
 api.get('/users/current/project', requireAuth, async (c) => {
   const s = c.get('settings');
@@ -484,6 +496,11 @@ api.put('/users/current/settings', requireAuth, async (c) => {
     }
   }
   if ('ai_cost_public' in body) out.ai_cost_public = body.ai_cost_public ? '1' : '0';
+  if ('friends' in body) {
+    const friends = cleanFriends(body.friends);
+    if (friends) out.friends = JSON.stringify(friends);
+    else errors.push(`friends must be a list of up to ${MAX_FRIENDS} { name, url } with web addresses`);
+  }
   for (const k of ['nudge_goal', 'nudge_streak', 'statusbar_goal'] as const) if (k in body) out[k] = body[k] ? '1' : '0';
   if ('nudge_streak_hour' in body) {
     const n = Math.trunc(Number(body.nudge_streak_hour));
