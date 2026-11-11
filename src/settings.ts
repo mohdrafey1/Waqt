@@ -1,4 +1,5 @@
 import { isValidTimeZone } from './time';
+import { type Price, parsePrices } from './pricing';
 
 export interface Env {
   DB: D1Database;
@@ -38,6 +39,9 @@ export interface Settings {
   first_heartbeat: number; // unix time of the first heartbeat Waqt ever received (0 = none yet)
   site_url: string; // where the dashboard lives, for links in reports
   parser_version: number; // user-agent parser version the stored heartbeats were read with
+  ai_prices: Price[]; // USD per million tokens, see pricing.ts
+  ai_prices_custom: boolean;
+  ai_cost_public: boolean; // show the AI cost estimate on the public profile and README
 }
 
 export const DEFAULTS: Record<string, string> = {
@@ -68,6 +72,8 @@ export const DEFAULTS: Record<string, string> = {
   first_heartbeat: '0',
   site_url: '',
   parser_version: '0',
+  ai_prices: '',
+  ai_cost_public: '0',
 };
 
 function obj<T>(json: string, check: (v: unknown) => v is T): Record<string, T> {
@@ -119,6 +125,9 @@ function parse(raw: Record<string, string>): Settings {
     first_heartbeat: Number(v.first_heartbeat) || 0,
     site_url: v.site_url,
     parser_version: Number(v.parser_version) || 0,
+    ai_prices: parsePrices(v.ai_prices),
+    ai_prices_custom: !!v.ai_prices,
+    ai_cost_public: v.ai_cost_public === '1',
   };
 }
 
@@ -177,6 +186,9 @@ export function publicSettingsView(s: Settings) {
     report_telegram_set: !!(s.report_telegram_token && s.report_telegram_chat),
     report_telegram_chat: s.report_telegram_chat,
     site_url: s.site_url,
+    ai_prices: s.ai_prices,
+    ai_prices_custom: s.ai_prices_custom,
+    ai_cost_public: s.ai_cost_public,
   };
 }
 

@@ -1,6 +1,7 @@
 // Weekly coding report, sent every Monday morning (your time zone) to Discord
 // and/or Telegram. No email service needed.
 
+import { usd } from './readme';
 import { Env, Settings, saveSettings, tzOf } from './settings';
 import { buildStats, streaks } from './stats';
 import { addDays, dayStart, durationShort, durationText, todayIn, weekday } from './time';
@@ -59,6 +60,7 @@ export async function buildReport(env: Env, s: Settings, end: string, siteUrl = 
     if (st.ai.seconds) bits.push(`${durationText(st.ai.seconds)} with AI agents`);
     if (st.ai.ai_lines + st.ai.human_lines) bits.push(`${Math.round(st.ai.ai_percent_of_lines)}% of changed lines by AI`);
     if (st.ai.models[0]) bits.push(`mostly ${st.ai.models[0].name}`);
+    if (st.ai.cost && st.ai.cost.total > 0) bits.push(`about ${usd(st.ai.cost.total)} in API tokens`);
     lines.push(`🤖 ${bits.join(' · ')}`);
   }
   if (st.dayparts.persona) lines.push(`🕑 You were a **${st.dayparts.persona}** this week`);

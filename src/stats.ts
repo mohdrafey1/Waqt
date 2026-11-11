@@ -1,5 +1,6 @@
 import { Env, Settings, aliasOf, tzOf } from './settings';
 import { flushDirty } from './summaries';
+import { priceFor, tokenCost } from './pricing';
 import { Range, addDays, daysBetween, durationItem, durationText, resolveRange, todayIn, weekday } from './time';
 
 export type View = 'public' | 'private';
@@ -193,6 +194,18 @@ export async function buildStats(env: Env, s: Settings, range: Range, view: View
     { sessions: 0, prompts: 0, input_tokens: 0, output_tokens: 0, cached_tokens: 0 },
   );
   const aiCategory = (grouped.categories || []).filter((r) => r.name === 'ai coding').reduce((a, r) => a + r.secs, 0);
+  // Cost estimate at API list prices (private unless you choose to show it).
+  const showCost = view === 'private' || s.ai_cost_public;
+  const costOf = (r: AiRow) => {
+    const p = priceFor(r.model, s.ai_prices);
+    return p ? Math.round(tokenCost(p, r.input_tokens, r.output_tokens, r.cached_tokens) * 100) / 100 : null;
+  };
+  const priced = aiRows.map((r) => ({ r, cost: costOf(r) }));
+  const aiCost = {
+    total: Math.round(priced.reduce((a, x) => a + (x.cost || 0), 0) * 100) / 100,
+    currency: 'USD',
+    unpriced_tokens: priced.filter((x) => x.cost === null).reduce((a, x) => a + x.r.input_tokens + x.r.output_tokens, 0),
+  };
   const totalLines = aiLines + humanLines;
   const ai = {
     seconds: Math.round(Math.max(aiSeconds, aiCategory)),
@@ -213,7 +226,10 @@ export async function buildStats(env: Env, s: Settings, range: Range, view: View
         sessions: r.sessions,
         input_tokens: r.input_tokens,
         output_tokens: r.output_tokens,
+        cached_tokens: r.cached_tokens,
+        ...(showCost ? { cost: costOf(r) } : {}),
       })),
+    cost: showCost ? aiCost : undefined,
     days: (aiDayRes.results as unknown as { day: string; secs: number }[]).map((r) => ({ date: r.day, total_seconds: Math.round(r.secs) })),
   };
 

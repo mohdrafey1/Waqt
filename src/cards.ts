@@ -2,6 +2,7 @@
 // so they work inside GitHub's image proxy and any <img> tag.
 
 import { PALETTE, colorFor, isHex, mix } from './colors';
+import { usd } from './readme';
 import { DayTotal, Stats } from './stats';
 import { addDays, durationShort, durationText, weekday } from './time';
 
@@ -320,7 +321,7 @@ export function aiCard(stats: Stats, o: CardOptions): string {
     ['AGENT TIME', durationText(a.seconds), `${a.percent_of_time}% of coding time`],
     ['LINES BY AI', lines ? `${Math.round(a.ai_percent_of_lines)}%` : '—', lines ? `${compactNum(a.ai_lines)} AI · ${compactNum(a.human_lines)} you` : ''],
     ['SESSIONS', compactNum(a.sessions), `${compactNum(a.prompts)} prompts`],
-    ['TOKENS', compactNum(a.input_tokens + a.output_tokens), `${compactNum(a.input_tokens)} in · ${compactNum(a.output_tokens)} out`],
+    ['TOKENS', compactNum(a.input_tokens + a.output_tokens), a.cost && a.cost.total > 0 ? `≈ ${usd(a.cost.total)} at API prices` : `${compactNum(a.input_tokens)} in · ${compactNum(a.output_tokens)} out`],
   ];
   let body =
     `<text x="${pad}" y="34" class="ti">${esc(title)}</text>` +

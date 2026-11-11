@@ -93,6 +93,24 @@
           <div class="panel"><div class="panel-head"><h2>AI agent time per day</h2></div><div id="ai-daily"></div></div>
           <div class="panel"><div class="panel-head"><h2>Models</h2></div><div id="ai-models"></div></div>
         </div>
+        <div class="panel section" id="ai-cost-panel">
+          <div class="panel-head"><h2>Cost estimate</h2><span class="muted" id="ai-cost-sub"></span></div>
+          <p class="muted" style="margin-top:0">What your AI token use would cost at API list prices, in US dollars per million tokens. Subscriptions like Claude Max or ChatGPT plans are flat-rate, so treat this as the value you got, not your bill. The longest matching name wins, so <code>Opus 5.5</code> is used before <code>Opus</code>.</p>
+          <div style="overflow-x:auto">
+            <table class="table" id="price-table">
+              <thead><tr><th>Model name starts with</th><th style="text-align:right">Input</th><th style="text-align:right">Output</th><th style="text-align:right">Cached input</th><th></th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <div id="ai-cost-models" style="margin-top:14px"></div>
+          <label class="check" style="margin-top:12px"><input type="checkbox" id="ai-cost-public"><span>Show the estimate on my public profile, cards and README</span></label>
+          <div class="row" style="margin-top:12px">
+            <button class="btn primary" id="price-save" type="button">Save prices</button>
+            <button class="btn" id="price-add" type="button">Add a model</button>
+            <button class="btn" id="price-reset" type="button">Reset to defaults</button>
+            <span class="err" id="price-err"></span>
+          </div>
+        </div>
         <p class="faint" style="font-size:12.5px">AI data comes from editor plugins that report it (for example Claude Code, Cursor, Copilot and Codex through the WakaTime CLI). Uses the range picked at the top.</p>
       </section>
 

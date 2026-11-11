@@ -151,7 +151,9 @@ async function loadAi() {
     tile('Lines by AI', lines ? `${Math.round(a.ai_percent_of_lines)}%` : '—', `${compact(a.ai_lines)} AI · ${compact(a.human_lines)} you`) +
     tile('Sessions', compact(a.sessions), `${compact(a.prompts)} prompts`) +
     tile('Tokens', compact(a.input_tokens + a.output_tokens), `${compact(a.input_tokens)} in · ${compact(a.output_tokens)} out · ${compact(a.cached_tokens)} cached`) +
-    tile('Top model', a.models[0]?.name || '—', a.models[0] ? fmt(a.models[0].total_seconds) : '');
+    tile('Top model', a.models[0]?.name || '—', a.models[0] ? fmt(a.models[0].total_seconds) : '') +
+    (a.cost ? tile('API cost estimate', usd(a.cost.total), a.cost.unpriced_tokens ? `${compact(a.cost.unpriced_tokens)} tokens not priced` : 'at list prices') : '');
+  drawCost(a);
   $('#ai-split').innerHTML = lines
     ? `<div style="width:${(a.ai_lines / lines) * 100}%;background:var(--accent)"></div><div style="width:${(a.human_lines / lines) * 100}%;background:#22c55e"></div>`
     : '';
@@ -164,6 +166,64 @@ async function loadAi() {
     'models',
   );
 }
+
+// ---------- AI cost estimate ----------
+const usd = (n) => '$' + (n || 0).toLocaleString(undefined, { minimumFractionDigits: n < 100 ? 2 : 0, maximumFractionDigits: n < 100 ? 2 : 0 });
+let prices = null; // rows being edited
+function drawCost(a) {
+  if (!prices) prices = (settings.ai_prices || []).map((p) => [...p]);
+  $('#ai-cost-public').checked = !!settings.ai_cost_public;
+  $('#ai-cost-sub').textContent = a.cost ? `${usd(a.cost.total)} in this range` : '';
+  const withTokens = a.models.filter((m) => m.input_tokens || m.output_tokens || m.cached_tokens);
+  $('#ai-cost-models').innerHTML = withTokens.length
+    ? `<table class="table"><thead><tr><th>Model</th><th style="text-align:right">Input</th><th style="text-align:right">Output</th><th style="text-align:right">Cached</th><th style="text-align:right">Estimate</th></tr></thead><tbody>${withTokens
+        .map((m) => `<tr><td>${esc(m.name)}</td><td class="num">${compact(m.input_tokens)}</td><td class="num">${compact(m.output_tokens)}</td><td class="num">${compact(m.cached_tokens)}</td><td class="num">${m.cost == null ? '<span class="faint">no price</span>' : usd(m.cost)}</td></tr>`)
+        .join('')}</tbody></table>`
+    : '<div class="empty">No token counts in this range. Tokens come from plugins that report them, such as Claude Code.</div>';
+  drawPrices();
+}
+function drawPrices() {
+  $('#price-table tbody').innerHTML = prices
+    .map(
+      (p, i) => `<tr data-i="${i}">
+        <td><input type="text" class="pr-name" value="${esc(p[0])}" maxlength="60" placeholder="e.g. Opus 5.5"></td>
+        ${[1, 2, 3].map((k) => `<td class="num"><input type="number" class="pr-${k}" value="${p[k]}" min="0" step="0.01"></td>`).join('')}
+        <td style="text-align:right"><button class="btn small pr-del" type="button" title="Remove">✕</button></td>
+      </tr>`,
+    )
+    .join('');
+  document.querySelectorAll('#price-table tbody tr').forEach((tr) => {
+    const i = Number(tr.dataset.i);
+    tr.querySelector('.pr-name').oninput = (e) => (prices[i][0] = e.target.value);
+    [1, 2, 3].forEach((k) => (tr.querySelector('.pr-' + k).oninput = (e) => (prices[i][k] = Number(e.target.value))));
+    tr.querySelector('.pr-del').onclick = () => {
+      prices.splice(i, 1);
+      drawPrices();
+    };
+  });
+}
+async function savePrices(body) {
+  $('#price-err').textContent = '';
+  try {
+    const { data } = await api('/users/current/settings', { method: 'PUT', body: JSON.stringify(body) });
+    settings = { ...settings, ...data };
+    prices = null;
+    toast('Prices saved');
+    loadAi();
+  } catch (e) {
+    $('#price-err').textContent = e.message;
+  }
+}
+$('#price-add').onclick = () => {
+  prices.push(['', 0, 0, 0]);
+  drawPrices();
+  document.querySelector('#price-table tbody tr:last-child .pr-name').focus();
+};
+$('#price-save').onclick = () =>
+  savePrices({ ai_prices: prices.filter((p) => p[0].trim()), ai_cost_public: $('#ai-cost-public').checked });
+$('#price-reset').onclick = () => {
+  if (window.confirm('Go back to the built-in prices?')) savePrices({ ai_prices: null, ai_cost_public: $('#ai-cost-public').checked });
+};
 
 // ---------- goals ----------
 function renderGoals(year) {

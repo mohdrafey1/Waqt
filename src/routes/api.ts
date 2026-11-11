@@ -7,6 +7,7 @@ import { backup } from './backup';
 import { buildReport, sendReport } from '../report';
 import { reparseUserAgents } from '../maintenance';
 import { usageReport } from '../usage';
+import { cleanPrices } from '../pricing';
 import { aliasOf, loadSettings, publicSettingsView, saveSettings, tzOf } from '../settings';
 import { clearCache, getStats, streaks } from '../stats';
 import { README_SECTIONS, renderReadme } from '../readme';
@@ -465,6 +466,15 @@ api.put('/users/current/settings', requireAuth, async (c) => {
     if (n >= 0 && n <= 168) out.goal_weekly_hours = String(n);
     else errors.push('goal_weekly_hours must be 0–168');
   }
+  if ('ai_prices' in body) {
+    if (body.ai_prices === null) out.ai_prices = '';
+    else {
+      const prices = cleanPrices(body.ai_prices);
+      if (prices) out.ai_prices = JSON.stringify(prices);
+      else errors.push('ai_prices must be a list of [name, input, output, cached] prices per million tokens');
+    }
+  }
+  if ('ai_cost_public' in body) out.ai_cost_public = body.ai_cost_public ? '1' : '0';
   if ('report_enabled' in body) out.report_enabled = body.report_enabled ? '1' : '0';
   // Secrets: undefined = keep as is, '' = remove, otherwise replace.
   if (typeof body.report_discord === 'string') {

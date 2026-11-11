@@ -69,6 +69,7 @@ export function renderReadme(st: Stats, sections: string[], streak: { current: n
     if (a.seconds) out.push(`⏱ AI agent time: ${durationText(a.seconds)} (${a.percent_of_time}% of coding)`);
     if (lines) out.push(`✍️ ${fmt(a.ai_lines)} lines by AI, ${fmt(a.human_lines)} by hand (${Math.round(a.ai_percent_of_lines)}% AI)`);
     if (a.input_tokens || a.output_tokens) out.push(`🔤 ${fmt(a.input_tokens)} input tokens, ${fmt(a.output_tokens)} output tokens`);
+    if (a.cost && a.cost.total > 0) out.push(`💵 About ${usd(a.cost.total)} at API list prices`);
     if (a.sessions) out.push(`🧠 ${fmt(a.sessions)} session${a.sessions === 1 ? '' : 's'}, ${fmt(a.prompts)} prompt${a.prompts === 1 ? '' : 's'}`);
     if (a.models.length) {
       out.push('');
@@ -82,4 +83,8 @@ export function renderReadme(st: Stats, sections: string[], streak: { current: n
   }
   out.push(`<sub>Tracked with [Waqt](https://github.com/mohdrafey1/waqt)${siteUrl ? ` · [see more](${siteUrl}/profile/)` : ''} · updated ${new Date().toISOString().slice(0, 16).replace('T', ' ')} UTC</sub>`);
   return out.join('\n').trim() + '\n';
+}
+
+export function usd(n: number): string {
+  return '$' + n.toLocaleString('en-US', { minimumFractionDigits: n < 100 ? 2 : 0, maximumFractionDigits: n < 100 ? 2 : 0 });
 }
