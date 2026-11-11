@@ -68,6 +68,7 @@ function showTab(name) {
   $('#range').classList.toggle('hidden', name !== 'overview');
   history.replaceState(null, '', name === 'overview' ? '#' : '#' + name);
   if (name === 'share') renderShare();
+  if (name === 'projects') renderProjects();
   if (name === 'setup') {
     renderSetup();
     renderImport();
@@ -113,6 +114,9 @@ async function loadOverview() {
   for (const dim of ['projects', 'languages', 'editors', 'categories', 'operating_systems', 'machines']) {
     barList($('#' + dim), st[dim], dim);
   }
+  const labelled = (st.labels || []).some((l) => l.name !== 'No label');
+  $('#labels-panel').classList.toggle('hidden', !labelled);
+  if (labelled) barList($('#labels'), st.labels, 'labels');
   if (st.total_seconds === 0 && year.total_seconds === 0) {
     $('#notice').innerHTML = `<div class="banner"><b>No activity yet.</b> Head to <a href="#setup" id="go-setup">Setup</a> to connect your editor. It takes about a minute.</div>`;
     $('#go-setup').onclick = (e) => {
@@ -123,6 +127,73 @@ async function loadOverview() {
     $('#notice').innerHTML = '';
   }
 }
+
+// ---------- projects ----------
+let projects = [];
+async function renderProjects() {
+  projects = (await api('/users/current/projects')).data;
+  const labels = [...new Set(Object.values(settings.project_labels || {}))].sort();
+  $('#label-options').innerHTML = labels.map((l) => `<option value="${esc(l)}">`).join('');
+  drawProjects();
+}
+function drawProjects() {
+  const f = $('#proj-filter').value.trim().toLowerCase();
+  const aliases = settings.project_aliases || {};
+  const labels = settings.project_labels || {};
+  const hidden = new Set((settings.hidden_projects || []).map((p) => p.toLowerCase()));
+  const rows = projects.filter((p) => !f || p.name.toLowerCase().includes(f) || (aliases[p.name] || '').toLowerCase().includes(f));
+  $('#proj-count').textContent = `${projects.length} project${projects.length === 1 ? '' : 's'}`;
+  $('#proj-table tbody').innerHTML = rows.length
+    ? rows
+        .map((p) => {
+          const shown = aliases[p.name] || p.name;
+          return `<tr data-name="${esc(p.name)}">
+            <td>${p.name ? esc(p.name) : '<span class="faint">Unknown Project</span>'}</td>
+            <td class="num">${esc(p.text)}</td>
+            <td><input type="text" class="p-alias" value="${esc(aliases[p.name] || '')}" placeholder="${esc(p.name)}" ${p.name ? '' : 'disabled'}></td>
+            <td><input type="text" class="p-label" list="label-options" value="${esc(labels[shown] || '')}" placeholder="e.g. Client A" ${p.name ? '' : 'disabled'}></td>
+            <td style="text-align:center"><input type="checkbox" class="p-hide" ${hidden.has(p.name.toLowerCase()) || hidden.has(shown.toLowerCase()) ? 'checked' : ''} ${p.name ? '' : 'disabled'}></td>
+          </tr>`;
+        })
+        .join('')
+    : '<tr><td colspan="5" class="empty">No projects yet</td></tr>';
+}
+$('#proj-filter').addEventListener('input', drawProjects);
+$('#proj-save').onclick = async () => {
+  $('#proj-err').textContent = '';
+  const aliases = { ...(settings.project_aliases || {}) };
+  const labels = { ...(settings.project_labels || {}) };
+  const hidden = new Set(settings.hidden_projects || []);
+  document.querySelectorAll('#proj-table tbody tr[data-name]').forEach((tr) => {
+    const name = tr.dataset.name;
+    if (!name) return;
+    const alias = tr.querySelector('.p-alias').value.trim();
+    const label = tr.querySelector('.p-label').value.trim();
+    const hide = tr.querySelector('.p-hide').checked;
+    if (alias && alias !== name) aliases[name] = alias;
+    else delete aliases[name];
+    const shown = alias || name;
+    // Labels belong to the name you see, so merged projects share one label.
+    if (label) labels[shown] = label;
+    else delete labels[shown];
+    if (hide) hidden.add(name);
+    else {
+      hidden.delete(name);
+      if (shown !== name) hidden.delete(shown);
+    }
+  });
+  try {
+    const { data } = await api('/users/current/settings', {
+      method: 'PUT',
+      body: JSON.stringify({ project_aliases: aliases, project_labels: labels, hidden_projects: [...hidden] }),
+    });
+    settings = { ...settings, ...data };
+    toast('Projects saved');
+    renderProjects();
+  } catch (e) {
+    $('#proj-err').textContent = e.message;
+  }
+};
 
 // ---------- share ----------
 function cardUrl() {
@@ -297,7 +368,7 @@ function start() {
   const r = store('waqt_range');
   if (r && [...$('#range').options].some((o) => o.value === r)) $('#range').value = r;
   const tab = location.hash.slice(1);
-  showTab(['share', 'setup', 'settings'].includes(tab) ? tab : 'overview');
+  showTab(['projects', 'share', 'setup', 'settings'].includes(tab) ? tab : 'overview');
   loadOverview().catch((e) => {
     $('#notice').innerHTML = `<div class="banner">${esc(e.message)}</div>`;
   });

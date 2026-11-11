@@ -3,7 +3,7 @@ import { type C, type AppEnv, cors, requireAuth, viewFor, withSettings } from '.
 import { forwardHeartbeats, forwardHost, forwardKey, forwardQueueSize, forwardingEnabled } from '../forward';
 import { MAX_BATCH, ingest } from '../ingest';
 import { importer } from './importer';
-import { loadSettings, publicSettingsView, saveSettings, tzOf } from '../settings';
+import { aliasOf, loadSettings, publicSettingsView, saveSettings, tzOf } from '../settings';
 import { clearCache, getStats } from '../stats';
 import { flushDirty, markAllRawDaysDirty } from '../summaries';
 import { RANGES, addDays, dayStart, durationText, isDay, isValidTimeZone, todayIn } from '../time';
@@ -201,7 +201,8 @@ api.get('/users/current/summaries', requireAuth, async (c) => {
     for (const [name, col, empty] of fields) {
       const m = new Map<string, number>();
       for (const r of rows) {
-        const k = (r[col] as string) || empty;
+        let k = (r[col] as string) || empty;
+        if (col === 'project' && r.project) k = aliasOf(s, r.project);
         m.set(k, (m.get(k) || 0) + r.seconds);
       }
       entry[name] = [...m.entries()]
@@ -241,6 +242,17 @@ api.get('/users/current/settings', requireAuth, async (c) => {
   });
 });
 
+// Every project name ever seen (before renames), for the Projects tab.
+api.get('/users/current/projects', requireAuth, async (c) => {
+  const { results } = await c.env.DB.prepare(
+    `SELECT project AS name, SUM(seconds) AS secs, MIN(day) AS first_day, MAX(day) AS last_day
+     FROM daily_summaries GROUP BY project ORDER BY secs DESC LIMIT 1000`,
+  ).all<{ name: string; secs: number; first_day: string; last_day: string }>();
+  return c.json({
+    data: results.map((r) => ({ name: r.name, total_seconds: Math.round(r.secs), text: durationText(r.secs), first_day: r.first_day, last_day: r.last_day })),
+  });
+});
+
 api.put('/users/current/settings', requireAuth, async (c) => {
   const s = c.get('settings');
   let body: Record<string, unknown>;
@@ -277,6 +289,26 @@ api.put('/users/current/settings', requireAuth, async (c) => {
     const n = Math.trunc(Number(body.raw_retention_days));
     if (n === 0 || (n >= 30 && n <= 36500)) out.raw_retention_days = String(n);
     else errors.push('raw_retention_days must be 0 (keep forever) or at least 30');
+  }
+  const strMap = (v: unknown, max: number): Record<string, string> | null => {
+    if (!v || typeof v !== 'object' || Array.isArray(v)) return null;
+    const out: Record<string, string> = {};
+    for (const [k, val] of Object.entries(v).slice(0, max)) {
+      const from = String(k).trim().slice(0, 200);
+      const to = String(val ?? '').trim().slice(0, 200);
+      if (from && to && from !== to) out[from] = to;
+    }
+    return out;
+  };
+  if ('project_aliases' in body) {
+    const m = strMap(body.project_aliases, 1000);
+    if (m) out.project_aliases = JSON.stringify(m);
+    else errors.push('project_aliases must be an object of "old name": "new name"');
+  }
+  if ('project_labels' in body) {
+    const m = strMap(body.project_labels, 1000);
+    if (m) out.project_labels = JSON.stringify(m);
+    else errors.push('project_labels must be an object of "project": "label"');
   }
   if (errors.length) return c.json({ error: errors.join('; ') }, 400);
 
