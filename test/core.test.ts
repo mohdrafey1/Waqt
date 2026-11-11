@@ -113,6 +113,11 @@ describe('user agents', () => {
       model: 'Opus 4.1-medium',
     });
     expect(parseUserAgent('wakatime/v2 (linux-6-x86_64) go1.25 gpt/5.2 codex/0.40 codex-wakatime/1.0').model).toBe('GPT 5.2');
+    // newer model tokens, odd versions and desktop-app names
+    expect(parseUserAgent('wakatime/v2 (darwin-25-arm64) go1.25 opus/5-5 claude/2.1 claude-code-wakatime/3.1')).toMatchObject({ editor: 'Claude Code', model: 'Opus 5.5' });
+    expect(parseUserAgent('wakatime/v2 (darwin-25-arm64) go1.25 opus/unknown claude/2.1 claude-code-wakatime/3.1')).toMatchObject({ editor: 'Claude Code', model: 'Opus' });
+    expect(parseUserAgent('opus/4-1-medium claude/2.1 claude-code-wakatime/3.1')).toMatchObject({ editor: 'Claude Code', model: 'Opus 4.1-medium' });
+    expect(parseUserAgent('wakatime/v2 (darwin-25-arm64) go1.25 GoogleChrome/141 macos-wakatime/5.0').editor).toBe('Chrome');
     // "claude/..." on its own is the Claude Code editor, not a model
     expect(parseUserAgent('wakatime/v2 (darwin-24-arm64) go1.25 claude/2.0.14 claude-code-wakatime/1.2.0')).toMatchObject({ editor: 'Claude Code', model: '' });
   });

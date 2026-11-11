@@ -63,7 +63,7 @@ export async function buildReport(env: Env, s: Settings, end: string, siteUrl = 
   }
   if (st.dayparts.persona) lines.push(`🕑 You were a **${st.dayparts.persona}** this week`);
   const streak = streaks(year.days, end);
-  if (streak.current) lines.push(`🔥 Streak: **${streak.current} day${streak.current === 1 ? '' : 's'}** (longest ${streak.longest})`);
+  if (streak.current) lines.push(`🔥 Streak: **${streak.current} day${streak.current === 1 ? '' : 's'}** (longest ${streak.longest} day${streak.longest === 1 ? '' : 's'})`);
   if (!st.total_seconds) lines.splice(0, lines.length, 'No coding activity this week. Fresh start on Monday! 🌱');
   if (siteUrl) lines.push(siteUrl);
   return { title: `📊 Your coding week · ${shortDate(start)} – ${shortDate(end)}`, lines };

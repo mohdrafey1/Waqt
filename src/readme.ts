@@ -69,7 +69,7 @@ export function renderReadme(st: Stats, sections: string[], streak: { current: n
     if (a.seconds) out.push(`⏱ AI agent time: ${durationText(a.seconds)} (${a.percent_of_time}% of coding)`);
     if (lines) out.push(`✍️ ${fmt(a.ai_lines)} lines by AI, ${fmt(a.human_lines)} by hand (${Math.round(a.ai_percent_of_lines)}% AI)`);
     if (a.input_tokens || a.output_tokens) out.push(`🔤 ${fmt(a.input_tokens)} input tokens, ${fmt(a.output_tokens)} output tokens`);
-    if (a.sessions) out.push(`🧠 ${fmt(a.sessions)} sessions, ${fmt(a.prompts)} prompts`);
+    if (a.sessions) out.push(`🧠 ${fmt(a.sessions)} session${a.sessions === 1 ? '' : 's'}, ${fmt(a.prompts)} prompt${a.prompts === 1 ? '' : 's'}`);
     if (a.models.length) {
       out.push('');
       const tot = a.models.reduce((x, m) => x + m.total_seconds, 0) || 1;
@@ -78,7 +78,7 @@ export function renderReadme(st: Stats, sections: string[], streak: { current: n
     out.push('```', '');
   }
   if (want.has('streak') && streak && streak.current) {
-    out.push(`🔥 **${streak.current}-day coding streak** (longest: ${streak.longest} days)`, '');
+    out.push(`🔥 **${streak.current}-day coding streak** (longest: ${streak.longest} day${streak.longest === 1 ? '' : 's'})`, '');
   }
   out.push(`<sub>Tracked with [Waqt](https://github.com/mohdrafey1/waqt)${siteUrl ? ` · [see more](${siteUrl}/profile/)` : ''} · updated ${new Date().toISOString().slice(0, 16).replace('T', ' ')} UTC</sub>`);
   return out.join('\n').trim() + '\n';

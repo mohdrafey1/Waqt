@@ -69,6 +69,44 @@ export const INSERT_SQL = `INSERT OR IGNORE INTO heartbeats
 
 export const MAX_BATCH = 1000;
 
+export const LAST_LANGUAGE = '<<LAST_LANGUAGE>>';
+
+/**
+ * Some plugins (browser and desktop apps) send "<<LAST_LANGUAGE>>", meaning "the
+ * language last used in this project". WakaTime resolves it on its server, so we do too:
+ * first from earlier heartbeats in the same batch, then from the database.
+ */
+async function resolveLastLanguage(env: Env, rows: Row[]): Promise<void> {
+  if (!rows.some((r) => r[6] === LAST_LANGUAGE)) return;
+  const sorted = [...rows].sort((a, b) => a[0] - b[0]);
+  const last = new Map<string, string>();
+  const missing = new Map<string, number>(); // project -> earliest time needing a lookup
+  for (const r of sorted) {
+    if (r[6] && r[6] !== LAST_LANGUAGE) last.set(r[4], r[6]);
+    else if (r[6] === LAST_LANGUAGE) {
+      const known = last.get(r[4]);
+      if (known) r[6] = known;
+      else if (!missing.has(r[4])) missing.set(r[4], r[0]);
+    }
+  }
+  for (const [project, time] of [...missing].slice(0, 5)) {
+    const hit = await env.DB.prepare(
+      `SELECT language FROM heartbeats WHERE project = ?1 AND time <= ?2 AND language NOT IN ('', ?3)
+       ORDER BY time DESC LIMIT 1`,
+    )
+      .bind(project, time, LAST_LANGUAGE)
+      .first<{ language: string }>();
+    // Walk forward in time: before the first known language in this batch, use the stored one.
+    let current = hit?.language || '';
+    for (const r of sorted) {
+      if (r[4] !== project) continue;
+      if (r[6] === LAST_LANGUAGE) r[6] = current;
+      else if (r[6]) current = r[6];
+    }
+  }
+  for (const r of rows) if (r[6] === LAST_LANGUAGE) r[6] = '';
+}
+
 /** Store heartbeats and return the per-heartbeat responses the WakaTime CLI expects. */
 export async function ingest(
   env: Env,
@@ -102,6 +140,7 @@ export async function ingest(
     responses.push([{ data: { id: `${row[0]}`, time: row[0], entity: row[1] } }, 201]);
   }
 
+  await resolveLastLanguage(env, rows);
   if (rows.length) {
     await env.DB.prepare(INSERT_SQL).bind(JSON.stringify(rows)).run();
     await markDaysDirty(env, [...days]);

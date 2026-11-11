@@ -2,23 +2,37 @@
 // count time with the same code the server uses, and upload compact daily totals.
 
 import { addDays, dayOf, dayStart, summarizeDay } from '/lib/core.js';
+import { isModelName, parseUserAgent } from '/lib/useragent.js';
 
 const OS_NAMES = { mac: 'macOS', macos: 'macOS', darwin: 'macOS', windows: 'Windows', linux: 'Linux' };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const int = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
 
+// WakaTime's own labels can be off (e.g. editor "Opus" for Claude Code's AI activity),
+// so prefer what Waqt's parser reads from the raw user agent.
+const uaCache = new Map();
+function agent(ua) {
+  if (!uaCache.has(ua.value)) {
+    const parsed = parseUserAgent(ua.value || '');
+    const editor = parsed.editor || (isModelName(ua.editor) ? '' : ua.editor || '');
+    const os = parsed.os || OS_NAMES[(ua.os || '').toLowerCase()] || ua.os || '';
+    const model = parsed.model || ua.ai_model || (isModelName(ua.editor) ? ua.editor : '');
+    uaCache.set(ua.value, { editor, os, model });
+  }
+  return uaCache.get(ua.value);
+}
+
 function toBeat(h, lookups) {
-  const ua = lookups.user_agents[h.user_agent_id] || {};
-  const os = ua.os || '';
+  const a = agent(lookups.user_agents[h.user_agent_id] || {});
   return {
     time: Number(h.time),
     project: h.project || '',
     language: h.language || '',
-    editor: ua.editor || '',
-    os: OS_NAMES[os.toLowerCase()] || os,
+    editor: a.editor,
+    os: a.os,
     machine: lookups.machines[h.machine_name_id] || '',
     category: (h.category || 'coding').toLowerCase(),
-    ai_model: ua.ai_model || '',
+    ai_model: a.model,
     ai_session: h.ai_session || '',
     ai_input_tokens: int(h.ai_input_tokens),
     ai_output_tokens: int(h.ai_output_tokens),
@@ -27,6 +41,15 @@ function toBeat(h, lookups) {
     ai_line_changes: int(h.ai_line_changes),
     human_line_changes: int(h.human_line_changes),
   };
+}
+
+/** Fill "<<LAST_LANGUAGE>>" with the language last used in the same project. */
+function resolveLastLanguage(beats) {
+  const last = new Map();
+  for (const b of beats) {
+    if (b.language === '<<LAST_LANGUAGE>>') b.language = last.get(b.project) || '';
+    else if (b.language) last.set(b.project, b.language);
+  }
 }
 
 async function readWithProgress(res, onProgress) {
@@ -91,6 +114,7 @@ export async function runImport({ api, authHeader, file, onStatus }) {
   dump = null;
   if (!beats.length) throw new Error('Nothing to import: the export has no activity from before Waqt started.');
   beats.sort((a, b) => a.time - b.time);
+  resolveLastLanguage(beats);
 
   onStatus(`Counting time for ${beats.length.toLocaleString()} heartbeats…`, 66);
   await sleep(30);

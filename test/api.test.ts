@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { KEY, auth, beats, call, cron, json, post, put } from './helpers';
+import { KEY, auth, beats, call, cron, env, json, post, put } from './helpers';
 
 describe('auth', () => {
   it('rejects requests without the key', async () => {
@@ -44,6 +44,19 @@ describe('heartbeats and stats', () => {
     await post('/api/v1/users/current/heartbeats.bulk', b);
     const st = (await json('/api/v1/users/current/stats/last_7_days', { headers: auth })).body.data;
     expect(st.projects.find((p: any) => p.name === 'dupes').total_seconds).toBe(600);
+  });
+
+  it('resolves <<LAST_LANGUAGE>> to the language last used in the project', async () => {
+    const b = beats(4, { project: 'browser', endAgo: 40000 });
+    b[0].language = 'Rust';
+    b[1].language = '<<LAST_LANGUAGE>>';
+    b[2].language = '<<LAST_LANGUAGE>>';
+    await post('/api/v1/users/current/heartbeats.bulk', b.slice(0, 2));
+    await post('/api/v1/users/current/heartbeats.bulk', b.slice(2)); // resolved from the database
+    const st = (await json('/api/v1/users/current/stats/last_7_days', { headers: auth })).body.data;
+    expect(st.languages.map((l: any) => l.name)).not.toContain('<<LAST_LANGUAGE>>');
+    const { results } = await env.DB.prepare("SELECT language FROM heartbeats WHERE project = 'browser' ORDER BY time").all<{ language: string }>();
+    expect(results.map((r) => r.language)).toEqual(['Rust', 'Rust', 'Rust', 'TypeScript']);
   });
 
   it('answers the editor status bar', async () => {

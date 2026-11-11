@@ -140,6 +140,7 @@ export async function buildStats(env: Env, s: Settings, range: Range, view: View
     const merged = new Map<string, number>();
     for (const r of grouped[dim] || []) {
       let name = r.name || EMPTY_NAMES[dim];
+      if (dim === 'languages' && r.name === '<<LAST_LANGUAGE>>') name = EMPTY_NAMES.languages;
       if (dim === 'projects') {
         name = r.name ? aliasOf(s, r.name) : EMPTY_NAMES.projects;
         projectSecs.set(name, (projectSecs.get(name) || 0) + r.secs);
