@@ -10,6 +10,8 @@
     "db:local": "wrangler d1 migrations apply DB --local",
     "db:migrate": "wrangler d1 migrations apply DB --remote",
     "deploy": "npm run db:migrate && wrangler deploy",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
     "check": "tsc --noEmit && wrangler deploy --dry-run"
   },
   "cloudflare": {
@@ -28,8 +30,10 @@
     "hono": "^4.13.17"
   },
   "devDependencies": {
+    "@cloudflare/vitest-plugin": "^1.7.0",
     "@cloudflare/workers-types": "^5.20261110.1",
     "typescript": "^5.9.3",
+    "vitest": "~4.1.0",
     "wrangler": "^4.160.0"
   }
 }
