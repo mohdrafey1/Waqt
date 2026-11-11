@@ -829,7 +829,12 @@ async function startImport(file) {
   };
   try {
     const r = await runImport({ api, headers: AUTH_HEADERS, file, onStatus: set });
-    set(`Done: imported ${r.days} days (${fmt(r.seconds)}), ${prettyDate(r.first, { year: 'numeric', month: 'short', day: 'numeric' })} to ${prettyDate(r.last, { year: 'numeric', month: 'short', day: 'numeric' })}.`, 100);
+    const long = { year: 'numeric', month: 'short', day: 'numeric' };
+    let msg = `Done: imported ${r.days} days (${fmt(r.seconds)}), ${prettyDate(r.first, long)} to ${prettyDate(r.last, long)}.`;
+    if (r.filled_days) msg += ` WakaTime's export ended ${prettyDate(r.export_end, long)}, so the days after it were fetched one by one.`;
+    if (r.missing_days.length) msg += ` Couldn't fetch ${r.missing_days.join(', ')} from WakaTime; import again later to fill them in.`;
+    if (r.truncated) msg += ' Only the first 62 days after the export could be fetched.';
+    set(msg, 100);
     toast('Import finished');
   } catch (e) {
     set('Import stopped: ' + e.message);

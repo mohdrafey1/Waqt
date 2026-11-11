@@ -38,7 +38,7 @@ async function ownSince(c: C, s: Settings): Promise<number> {
   return t;
 }
 
-type Dump = { id: string; type: string; status: string; percent_complete: number; download_url: string; expires: string; has_failed: boolean; is_stuck: boolean };
+type Dump = { id: string; type: string; status: string; percent_complete: number; download_url: string; expires: string; created_at?: string; has_failed: boolean; is_stuck: boolean };
 
 async function latestHeartbeatsDump(c: C): Promise<Dump | null> {
   const res = await fetch(`${wakatime(c)}/users/current/data_dumps`, { headers: wakaHeaders(c) });
@@ -94,6 +94,7 @@ importer.post('/wakatime/dump', async (c) => {
         ready: dump.status === 'Completed' && !!dump.download_url,
         failed: dump.has_failed || dump.is_stuck,
         expires: dump.expires,
+        created_at: dump.created_at || null,
       },
     });
   } catch (e) {
@@ -114,6 +115,18 @@ importer.get('/wakatime/download', async (c) => {
   const len = file.headers.get('Content-Length');
   if (len) headers.set('Content-Length', len);
   return new Response(file.body, { headers });
+});
+
+// One day of heartbeats straight from WakaTime. WakaTime keeps an export for a while
+// and won't make a new one until it expires, so the newest days are fetched this way.
+// Streamed through unparsed, like the export, to stay inside the free plan's CPU limit.
+importer.get('/wakatime/day', async (c) => {
+  if (!forwardKey(c.env)) return c.json({ error: 'WAKATIME_API_KEY is not set.' }, 400);
+  const date = c.req.query('date');
+  if (!isDay(date)) return c.json({ error: 'date must be YYYY-MM-DD' }, 400);
+  const res = await fetch(`${wakatime(c)}/users/current/heartbeats?date=${date}`, { headers: wakaHeaders(c) });
+  if (!res.ok || !res.body) return c.json({ error: `WakaTime answered ${res.status} for ${date}.` }, res.status === 401 || res.status === 403 ? 502 : 409);
+  return new Response(res.body, { headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' } });
 });
 
 // Editor / OS / AI model names and machine names, which the export only references by id.

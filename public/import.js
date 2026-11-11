@@ -55,6 +55,42 @@ function resolveLastLanguage(beats) {
   }
 }
 
+const MAX_GAP_DAYS = 62;
+
+/**
+ * WakaTime keeps an export for a while and only makes a new one after it expires, so the
+ * export can end days before Waqt's first heartbeat. Fetch those days one at a time.
+ * @returns {Promise<{ beats: any[], fetched: string[], failed: string[], truncated: boolean }>}
+ */
+async function fillGap({ api, from, until, tz, lookups, onStatus }) {
+  const days = [];
+  // A day either side: WakaTime's days follow the time zone set in your WakaTime account.
+  for (let d = addDays(dayOf(from, tz), -1); d <= addDays(dayOf(until, tz), 1); d = addDays(d, 1)) days.push(d);
+  const truncated = days.length > MAX_GAP_DAYS;
+  const list = days.slice(0, MAX_GAP_DAYS);
+  const beats = [];
+  const seen = new Set();
+  const fetched = [];
+  const failed = [];
+  for (let i = 0; i < list.length; i++) {
+    onStatus(`Fetching ${list[i]} from WakaTime (the export ends ${dayOf(from, tz)})…`, 62 + (i / list.length) * 4);
+    try {
+      const body = await api(`/users/current/import/wakatime/day?date=${list[i]}`);
+      for (const h of body.data || []) {
+        const b = toBeat(h, lookups);
+        const key = `${b.time}|${h.entity || ''}`;
+        if (!Number.isFinite(b.time) || b.time <= from || b.time >= until || seen.has(key)) continue;
+        seen.add(key);
+        beats.push(b);
+      }
+      fetched.push(list[i]);
+    } catch {
+      failed.push(list[i]);
+    }
+  }
+  return { beats, fetched, failed, truncated };
+}
+
 async function readWithProgress(res, onProgress) {
   const total = Number(res.headers.get('Content-Length')) || 0;
   const reader = res.body.getReader();
@@ -110,11 +146,24 @@ export async function runImport({ api, headers = {}, file, onStatus }) {
 
   const ownSince = status.own_since || Infinity;
   const beats = [];
+  let exportEnd = 0;
   for (const d of dump.days || []) for (const h of d.heartbeats || []) {
     const b = toBeat(h, lookups);
-    if (Number.isFinite(b.time) && b.time < ownSince) beats.push(b);
+    if (!Number.isFinite(b.time)) continue;
+    if (b.time > exportEnd) exportEnd = b.time;
+    if (b.time < ownSince) beats.push(b);
   }
   dump = null;
+
+  // Days between the end of the export and Waqt's first heartbeat.
+  const gap = { fetched: [], failed: [], truncated: false, from: exportEnd };
+  if (exportEnd && Number.isFinite(ownSince) && ownSince - exportEnd > 3600 && status.wakatime_key) {
+    const filled = await fillGap({ api, from: exportEnd, until: ownSince, tz: status.timezone, lookups, onStatus });
+    for (const b of filled.beats) beats.push(b);
+    Object.assign(gap, filled);
+  } else if (exportEnd && Number.isFinite(ownSince) && ownSince - exportEnd > 86400) {
+    gap.failed = ['(no WakaTime key to fetch them)'];
+  }
   if (!beats.length) throw new Error('Nothing to import: the export has no activity from before Waqt started.');
   beats.sort((a, b) => a.time - b.time);
   resolveLastLanguage(beats);
@@ -148,5 +197,14 @@ export async function runImport({ api, headers = {}, file, onStatus }) {
   }
   await api('/users/current/import/done', { method: 'POST' });
   const seconds = days.reduce((a, d) => a + d.rows.reduce((x, r) => x + r[6], 0), 0);
-  return { days: stored, seconds, first: days[0]?.day, last: days[days.length - 1]?.day };
+  return {
+    days: stored,
+    seconds,
+    first: days[0]?.day,
+    last: days[days.length - 1]?.day,
+    export_end: gap.from ? dayOf(gap.from, tz) : null,
+    filled_days: gap.fetched.length,
+    missing_days: gap.failed,
+    truncated: gap.truncated,
+  };
 }

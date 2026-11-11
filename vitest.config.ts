@@ -22,6 +22,9 @@ export default defineConfig(async () => {
         },
       }),
     ],
+    // Browser modules import shared code as /lib/…, the path the Worker serves it at.
+    publicDir: false,
+    resolve: { alias: [{ find: /^\/lib\//, replacement: path.join(import.meta.dirname, 'public/lib/') }] },
     test: {
       setupFiles: ['./test/setup.ts'],
     },

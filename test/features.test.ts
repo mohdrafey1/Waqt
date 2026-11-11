@@ -114,6 +114,22 @@ describe('importing WakaTime history', () => {
   });
 });
 
+describe('fetching single days from WakaTime', () => {
+  it('passes the day through and reports failures', async () => {
+    const calls = mockFetch((url) => {
+      if (url.includes('/users/current/heartbeats?date=2026-01-15')) return Response.json({ data: [{ time: 1, entity: 'a' }], timezone: 'UTC' });
+      return new Response('{"error":"Rate limited"}', { status: 429 });
+    });
+    const env = { WAKATIME_API_KEY: WAKA.WAKATIME_API_KEY, WAKATIME_IMPORT_URL: 'https://wakatime.test/api/v1' } as any;
+    const ok = await json('/api/v1/users/current/import/wakatime/day?date=2026-01-15', { headers: auth }, env);
+    expect(ok.status).toBe(200);
+    expect(ok.body.data).toEqual([{ time: 1, entity: 'a' }]);
+    expect(calls[0].init.headers).toMatchObject({ Authorization: expect.stringMatching(/^Basic /) });
+    expect((await json('/api/v1/users/current/import/wakatime/day?date=2026-01-16', { headers: auth }, env)).status).toBe(409);
+    expect((await json('/api/v1/users/current/import/wakatime/day?date=nope', { headers: auth }, env)).status).toBe(400);
+  });
+});
+
 describe('weekly report', () => {
   it('sends to Discord and Telegram with the week summary', async () => {
     const calls = mockFetch(() => Response.json({ ok: true }));
