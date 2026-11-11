@@ -1,0 +1,35 @@
+{
+  "name": "waqt",
+  "version": "1.0.0",
+  "description": "Free, self-hosted coding time tracker. Works with every WakaTime editor plugin and runs on Cloudflare's free plan.",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "npm run db:local && wrangler dev",
+    "db:local": "wrangler d1 migrations apply DB --local",
+    "predeploy": "wrangler d1 migrations apply DB --remote",
+    "deploy": "wrangler deploy",
+    "check": "tsc --noEmit && wrangler deploy --dry-run"
+  },
+  "cloudflare": {
+    "label": "Waqt: free coding time tracker",
+    "products": [
+      "Workers",
+      "D1"
+    ],
+    "bindings": {
+      "API_KEY": {
+        "description": "Your secret key. It **must be a lowercase UUID v4** (the WakaTime plugins reject anything else). Generate one at [uuidgenerator.net/version4](https://www.uuidgenerator.net/version4) or run `crypto.randomUUID()` in your browser console. You'll use it to log in and in `~/.wakatime.cfg`."
+      }
+    }
+  },
+  "dependencies": {
+    "hono": "^4.13.17"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261110.1",
+    "typescript": "^5.9.3",
+    "wrangler": "^4.160.0"
+  }
+}
