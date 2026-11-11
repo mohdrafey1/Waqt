@@ -1,3 +1,4 @@
+import { runImport } from './import.js';
 import { LOGO, barList, copy, dailyBars, esc, fmt, heatmap, prettyDate, toast } from './shared.js';
 
 const $ = (s) => document.querySelector(s);
@@ -67,7 +68,10 @@ function showTab(name) {
   $('#range').classList.toggle('hidden', name !== 'overview');
   history.replaceState(null, '', name === 'overview' ? '#' : '#' + name);
   if (name === 'share') renderShare();
-  if (name === 'setup') renderSetup();
+  if (name === 'setup') {
+    renderSetup();
+    renderImport();
+  }
   if (name === 'settings') renderSettings();
 }
 
@@ -192,6 +196,49 @@ function renderSetup() {
           : `<span style="color:var(--ok)">On</span>, to ${esc(settings.forwarding.to)}`
     }</dd>`;
 }
+// ---------- import ----------
+async function renderImport() {
+  try {
+    const st = (await api('/users/current/import/status')).data;
+    $('#import-cutoff').textContent = st.own_since_day ? prettyDate(st.own_since_day, { year: 'numeric', month: 'short', day: 'numeric' }) : 'your first heartbeat';
+    $('#import-nokey').classList.toggle('hidden', st.wakatime_key);
+    $('#import-start').disabled = !st.wakatime_key;
+    $('#import-remove').classList.toggle('hidden', !st.imported.days);
+    $('#import-summary').textContent = st.imported.days
+      ? `${st.imported.days} days imported · ${fmt(st.imported.seconds)}`
+      : '';
+  } catch (e) {
+    $('#import-summary').textContent = e.message;
+  }
+}
+
+async function startImport(file) {
+  $('#import-progress').classList.remove('hidden');
+  $('#import-start').disabled = true;
+  const set = (msg, pct) => {
+    $('#import-status').textContent = msg;
+    if (pct != null) $('#import-bar').style.width = Math.min(100, pct) + '%';
+  };
+  try {
+    const r = await runImport({ api, authHeader: 'Bearer ' + key, file, onStatus: set });
+    set(`Done: imported ${r.days} days (${fmt(r.seconds)}), ${prettyDate(r.first, { year: 'numeric', month: 'short', day: 'numeric' })} to ${prettyDate(r.last, { year: 'numeric', month: 'short', day: 'numeric' })}.`, 100);
+    toast('Import finished');
+  } catch (e) {
+    set('Import stopped: ' + e.message);
+  }
+  $('#import-file').value = '';
+  renderImport();
+}
+
+$('#import-start').onclick = () => startImport();
+$('#import-file').onchange = (e) => e.target.files[0] && startImport(e.target.files[0]);
+$('#import-remove').onclick = async () => {
+  if (!window.confirm('Remove all imported WakaTime history from Waqt? Your own Waqt data is not affected.')) return;
+  await api('/users/current/import', { method: 'DELETE' });
+  toast('Imported history removed');
+  renderImport();
+};
+
 $('#reveal').onclick = () => {
   revealed = !revealed;
   renderSetup();

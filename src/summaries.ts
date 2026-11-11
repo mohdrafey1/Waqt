@@ -62,6 +62,37 @@ export function replaceDayStatements(db: D1Database, day: string, source: string
   ];
 }
 
+type DayRows = { day: string; sum: DaySummary };
+
+/**
+ * Replace many days of one source in 6 statements (instead of 6 per day),
+ * which keeps imports well inside D1's per-request query limit.
+ */
+export function replaceDaysStatements(db: D1Database, source: string, days: DayRows[]): D1PreparedStatement[] {
+  const list = JSON.stringify(days.map((d) => d.day));
+  const rows = days.flatMap((d) => d.sum.rows.map((r) => [d.day, ...r]));
+  const hours = days.flatMap((d) => d.sum.hours.map((h) => [d.day, ...h]));
+  const ai = days.flatMap((d) => d.sum.ai.map((a) => [d.day, ...a]));
+  const j = (i: number) => `json_extract(value, '$[${i}]')`;
+  return [
+    db.prepare('DELETE FROM daily_summaries WHERE source = ?1 AND day IN (SELECT value FROM json_each(?2))').bind(source, list),
+    db.prepare('DELETE FROM daily_hours WHERE source = ?1 AND day IN (SELECT value FROM json_each(?2))').bind(source, list),
+    db.prepare('DELETE FROM daily_ai WHERE source = ?1 AND day IN (SELECT value FROM json_each(?2))').bind(source, list),
+    db.prepare(
+      `INSERT INTO daily_summaries (day, source, project, language, editor, os, machine, category, seconds, ai_lines, human_lines)
+       SELECT ${j(0)}, ?1, ${[1, 2, 3, 4, 5, 6, 7, 8, 9].map(j).join(', ')} FROM json_each(?2)`,
+    ).bind(source, JSON.stringify(rows)),
+    db.prepare(`INSERT INTO daily_hours (day, source, hour, seconds) SELECT ${j(0)}, ?1, ${j(1)}, ${j(2)} FROM json_each(?2)`).bind(
+      source,
+      JSON.stringify(hours),
+    ),
+    db.prepare(
+      `INSERT INTO daily_ai (day, source, model, seconds, sessions, prompts, input_tokens, output_tokens, cached_tokens, ai_lines)
+       SELECT ${j(0)}, ?1, ${[1, 2, 3, 4, 5, 6, 7, 8].map(j).join(', ')} FROM json_each(?2)`,
+    ).bind(source, JSON.stringify(ai)),
+  ];
+}
+
 /** Recalculate up to `max` days that changed, newest first. Returns how many were done. */
 export async function flushDirty(env: Env, s: Settings, max: number, onlyDays?: string[]): Promise<number> {
   let rows: { day: string; marked_at: number }[];

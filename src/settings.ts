@@ -35,6 +35,7 @@ export interface Settings {
   report_telegram_chat: string;
   last_report_week: string;
   needs_rebuild: boolean;
+  first_heartbeat: number; // unix time of the first heartbeat Waqt ever received (0 = none yet)
 }
 
 const DEFAULTS: Record<string, string> = {
@@ -62,6 +63,7 @@ const DEFAULTS: Record<string, string> = {
   report_telegram_chat: '',
   last_report_week: '',
   needs_rebuild: '0',
+  first_heartbeat: '0',
 };
 
 function obj<T>(json: string, check: (v: unknown) => v is T): Record<string, T> {
@@ -110,6 +112,7 @@ function parse(raw: Record<string, string>): Settings {
     report_telegram_chat: v.report_telegram_chat,
     last_report_week: v.last_report_week,
     needs_rebuild: v.needs_rebuild === '1',
+    first_heartbeat: Number(v.first_heartbeat) || 0,
   };
 }
 

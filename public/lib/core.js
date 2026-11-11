@@ -31,6 +31,62 @@
 
 const round3 = (n) => Math.round(n * 1000) / 1000;
 
+// ---------- time zones (days are "YYYY-MM-DD" in the user's zone) ----------
+
+/** @type {Map<string, Intl.DateTimeFormat>} */
+const formatters = new Map();
+function formatter(tz) {
+  let f = formatters.get(tz);
+  if (!f) {
+    f = new Intl.DateTimeFormat('en-US', {
+      timeZone: tz,
+      hourCycle: 'h23',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+    });
+    formatters.set(tz, f);
+  }
+  return f;
+}
+function zonedParts(ms, tz) {
+  /** @type {Record<string, number>} */
+  const o = {};
+  for (const p of formatter(tz).formatToParts(new Date(ms))) if (p.type !== 'literal') o[p.type] = Number(p.value);
+  return { y: o.year, m: o.month, d: o.day, h: o.hour % 24, mi: o.minute, s: o.second };
+}
+function offsetMs(ms, tz) {
+  const p = zonedParts(ms, tz);
+  return Date.UTC(p.y, p.m - 1, p.d, p.h, p.mi, p.s) - Math.floor(ms / 1000) * 1000;
+}
+const pad = (n) => String(n).padStart(2, '0');
+
+/** Day string for a unix timestamp (seconds) in the given zone. @returns {string} */
+export function dayOf(epochSeconds, tz) {
+  const p = zonedParts(epochSeconds * 1000, tz);
+  return `${p.y}-${pad(p.m)}-${pad(p.d)}`;
+}
+
+/** Unix timestamp (seconds) of local midnight at the start of `day`. @returns {number} */
+export function dayStart(day, tz) {
+  const [y, m, d] = day.split('-').map(Number);
+  const guess = Date.UTC(y, m - 1, d);
+  const first = offsetMs(guess, tz);
+  let start = guess - first;
+  const second = offsetMs(start, tz);
+  if (second !== first) start = guess - second;
+  return start / 1000;
+}
+
+/** @returns {string} */
+export function addDays(day, n) {
+  const [y, m, d] = day.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d + n)).toISOString().slice(0, 10);
+}
+
 /**
  * Turn one day's heartbeats (sorted by time) into totals. Each heartbeat is credited
  * with the gap until the next one if that gap is within `timeout` seconds, the way

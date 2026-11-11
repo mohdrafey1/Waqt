@@ -105,6 +105,12 @@ export async function ingest(
   if (rows.length) {
     await env.DB.prepare(INSERT_SQL).bind(JSON.stringify(rows)).run();
     await markDaysDirty(env, [...days]);
+    // Remember when Waqt's own data starts, so WakaTime imports never double count.
+    if (!s.first_heartbeat) {
+      const first = Math.min(...rows.map((r) => r[0]));
+      await saveSettings(env.DB, { first_heartbeat: String(first) });
+      s.first_heartbeat = first;
+    }
   }
   return { responses };
 }

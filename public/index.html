@@ -164,6 +164,20 @@
             <p class="muted" style="margin:0;font-size:13px">Your editor can only send to one server, so Waqt can pass every heartbeat on to WakaTime for you. In Cloudflare, open this Worker → <b>Settings → Variables and Secrets → Add</b>, choose <b>Secret</b>, name it <code>WAKATIME_API_KEY</code> and paste your key from <a href="https://wakatime.com/api-key" target="_blank" rel="noopener">wakatime.com/api-key</a>. New activity then goes to both.</p>
           </div>
         </div>
+        <div class="panel section" id="import-panel">
+          <div class="panel-head"><h2>Import your WakaTime history</h2><span class="muted" id="import-summary"></span></div>
+          <p class="muted" style="margin-top:0">Bring your past coding time over from WakaTime. Only activity from before Waqt's first heartbeat (<b id="import-cutoff">—</b>) is imported, so nothing is counted twice. Your browser does the counting, then Waqt stores compact daily totals.</p>
+          <div id="import-nokey" class="banner hidden" style="margin:0 0 14px">To import automatically, add your key from <a href="https://wakatime.com/api-key" target="_blank" rel="noopener">wakatime.com/api-key</a> as the <code>WAKATIME_API_KEY</code> secret (Cloudflare → this Worker → Settings → Variables and Secrets). You can turn forwarding off below if you only want the import.</div>
+          <div class="row">
+            <button class="btn primary" id="import-start" type="button">Import from WakaTime</button>
+            <label class="btn" style="cursor:pointer">Use an export file<input type="file" id="import-file" accept=".json,application/json" hidden></label>
+            <button class="btn" id="import-remove" type="button">Remove imported data</button>
+          </div>
+          <div id="import-progress" class="hidden" style="margin-top:16px">
+            <div class="track" style="height:8px;background:var(--panel-2);border-radius:5px;overflow:hidden"><div id="import-bar" style="height:100%;width:0;background:var(--accent);transition:width .3s"></div></div>
+            <div class="muted" id="import-status" style="margin-top:8px;font-size:13px"></div>
+          </div>
+        </div>
       </section>
 
       <!-- Settings -->

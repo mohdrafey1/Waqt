@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { type C, type AppEnv, cors, requireAuth, viewFor, withSettings } from '../http';
 import { forwardHeartbeats, forwardHost, forwardKey, forwardQueueSize, forwardingEnabled } from '../forward';
 import { MAX_BATCH, ingest } from '../ingest';
+import { importer } from './importer';
 import { loadSettings, publicSettingsView, saveSettings, tzOf } from '../settings';
 import { clearCache, getStats } from '../stats';
 import { flushDirty, markAllRawDaysDirty } from '../summaries';
@@ -289,3 +290,4 @@ api.put('/users/current/settings', requireAuth, async (c) => {
   return c.json({ data: { ...publicSettingsView(next), effective_timezone: tzOf(next), rebuilding_days: rebuilding } });
 });
 
+api.route('/users/current/import', importer);

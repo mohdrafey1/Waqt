@@ -1,24 +1,11 @@
 // Time zone and duration helpers. Days are "YYYY-MM-DD" strings in the user's time zone.
+// The core zone math lives in public/lib/core.js so the browser can share it.
 
-const formatters = new Map<string, Intl.DateTimeFormat>();
+import { addDays, dayOf, dayStart } from '../public/lib/core.js';
 
-function formatter(tz: string): Intl.DateTimeFormat {
-  let f = formatters.get(tz);
-  if (!f) {
-    f = new Intl.DateTimeFormat('en-US', {
-      timeZone: tz,
-      hourCycle: 'h23',
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-    });
-    formatters.set(tz, f);
-  }
-  return f;
-}
+export { addDays, dayOf, dayStart };
+
+const pad = (n: number) => String(n).padStart(2, '0');
 
 export function isValidTimeZone(tz: string): boolean {
   if (!tz || tz.length > 64) return false;
@@ -28,44 +15,6 @@ export function isValidTimeZone(tz: string): boolean {
   } catch {
     return false;
   }
-}
-
-function zonedParts(ms: number, tz: string) {
-  const out: Record<string, number> = {};
-  for (const p of formatter(tz).formatToParts(new Date(ms))) {
-    if (p.type !== 'literal') out[p.type] = Number(p.value);
-  }
-  return { y: out.year, m: out.month, d: out.day, h: out.hour % 24, mi: out.minute, s: out.second };
-}
-
-function offsetMs(ms: number, tz: string): number {
-  const p = zonedParts(ms, tz);
-  const asUtc = Date.UTC(p.y, p.m - 1, p.d, p.h, p.mi, p.s);
-  return asUtc - Math.floor(ms / 1000) * 1000;
-}
-
-const pad = (n: number) => String(n).padStart(2, '0');
-
-/** Day string for a unix timestamp (seconds) in the given zone. */
-export function dayOf(epochSeconds: number, tz: string): string {
-  const p = zonedParts(epochSeconds * 1000, tz);
-  return `${p.y}-${pad(p.m)}-${pad(p.d)}`;
-}
-
-/** Unix timestamp (seconds) of local midnight at the start of `day`. */
-export function dayStart(day: string, tz: string): number {
-  const [y, m, d] = day.split('-').map(Number);
-  const guess = Date.UTC(y, m - 1, d);
-  const first = offsetMs(guess, tz);
-  let start = guess - first;
-  const second = offsetMs(start, tz);
-  if (second !== first) start = guess - second;
-  return start / 1000;
-}
-
-export function addDays(day: string, n: number): string {
-  const [y, m, d] = day.split('-').map(Number);
-  return new Date(Date.UTC(y, m - 1, d + n)).toISOString().slice(0, 10);
 }
 
 export function daysBetween(start: string, end: string): number {
