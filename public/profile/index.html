@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Coding activity · Waqt</title>
+  <meta name="description" content="Coding time, languages and editors, tracked with Waqt.">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/style.css">
+  <style>
+    .hero { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; padding-top: 34px; }
+    .hero h1 { font-size: 26px; }
+    .hero p { margin: 4px 0 0; }
+    footer { text-align: center; color: var(--faint); font-size: 12.5px; margin-top: 30px; }
+    footer a { color: var(--muted); }
+    body.embed { background: transparent; }
+    body.embed .wrap { padding: 0; max-width: none; }
+    body.embed .hero { padding-top: 0; }
+    body.embed .hero h1 { font-size: 18px; }
+    body.embed .grid.tiles { margin-top: 14px; }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <div class="hero">
+      <div>
+        <h1 id="name">Coding activity</h1>
+        <p class="muted" id="sub">&nbsp;</p>
+      </div>
+      <div class="seg" id="ranges">
+        <button data-r="last_7_days">7 days</button>
+        <button data-r="last_30_days">30 days</button>
+        <button data-r="last_year">Year</button>
+        <button data-r="all_time">All time</button>
+      </div>
+    </div>
+    <div id="private" class="banner hidden">This profile is private.</div>
+    <div id="content">
+      <div class="grid tiles" data-s="stats" id="tiles"></div>
+      <div class="panel section" data-s="heatmap"><div class="panel-head"><h2>Last year</h2><span class="muted" id="heat-sub"></span></div><div id="heat"></div></div>
+      <div class="panel section" data-s="daily"><div class="panel-head"><h2>Daily coding time</h2></div><div id="daily"></div></div>
+      <div class="grid three section" id="lists">
+        <div class="panel" data-s="languages"><div class="panel-head"><h2>Languages</h2></div><div id="languages"></div></div>
+        <div class="panel" data-s="editors"><div class="panel-head"><h2>Editors</h2></div><div id="editors"></div></div>
+        <div class="panel" data-s="categories"><div class="panel-head"><h2>Activity</h2></div><div id="categories"></div></div>
+        <div class="panel" data-s="os"><div class="panel-head"><h2>Operating systems</h2></div><div id="operating_systems"></div></div>
+        <div class="panel" data-s="projects"><div class="panel-head"><h2>Projects</h2></div><div id="projects"></div></div>
+      </div>
+    </div>
+    <footer>Tracked with <a href="https://github.com/mohdrafey1/waqt" target="_blank" rel="noopener">Waqt</a>, a free, open-source coding time tracker.</footer>
+  </main>
+  <script type="module" src="/profile/profile.js"></script>
+</body>
+</html>
