@@ -19,6 +19,8 @@ dashboard tells you when a new version is out.
 - **Version check.** The dashboard shows the running version and when a newer one is out.
 
 ### Improved
+- Importing from WakaTime no longer misses the days between an older WakaTime export and Waqt's first heartbeat: they are fetched one day at a time.
+- The README walks through every field of Cloudflare's setup screen and has an after-deploy checklist.
 - The raw user agent of every heartbeat is kept, and old heartbeats are re-read automatically whenever the parser learns something new.
 - The update workflow no longer fails when workflow files change upstream; it lists them for you, or applies them with a `WAQT_UPDATE_TOKEN` secret. Its commits and pull requests now name the version.
 

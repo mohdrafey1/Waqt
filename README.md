@@ -47,10 +47,36 @@ WakaTime's free plan only keeps 1 week of history. Waqt is a small server you ru
    crypto.randomUUID()
    ```
    or use [uuidgenerator.net/version4](https://www.uuidgenerator.net/version4). Keep it somewhere safe.
-2. **Click [Deploy to Cloudflare](https://deploy.workers.cloudflare.com/?url=https://github.com/mohdrafey1/waqt).** Sign in (or sign up free), connect GitHub, and paste your key into the `API_KEY` field. Cloudflare copies this repo to your GitHub, creates the database, and deploys it.
-3. **Open your Worker URL** (something like `https://waqt.<you>.workers.dev`) and sign in with your key. Then set a dashboard password in **Settings → Sign-in and device keys**, so you don't need to paste the key into browsers again.
+2. **Click [Deploy to Cloudflare](https://deploy.workers.cloudflare.com/?url=https://github.com/mohdrafey1/waqt).** Sign in (or sign up free) and fill in the setup screen like this:
+
+   | On Cloudflare's screen | Choose |
+   | --- | --- |
+   | Git account | your GitHub account |
+   | Repository name | anything, e.g. `waqt` |
+   | Create private Git repository | **on** (backups are only safe in a private repository) |
+   | D1 database | **Create new** |
+   | Enable read replication | off (not needed for one person) |
+   | `API_KEY` | the key from step 1 |
+   | Enable Preview builds | **off** (previews would share your real database) |
+   | Protect with Cloudflare Access | **off** (editors can't get through Access; Waqt has its own sign-in) |
+   | Advanced settings | leave as they are |
+
+   Click **Deploy**. Cloudflare copies this repo to your GitHub, creates the database and deploys it.
+3. **Open your Worker URL** (something like `https://waqt.<you>.workers.dev`) and sign in with your key.
 
 Every push to your copy of the repo redeploys automatically.
+
+### After deploying: a 5-minute checklist
+
+1. **Settings → Sign-in and device keys:** set a dashboard password, so you never paste the key into a browser again.
+2. **Setup:** click **Create a key for this device**, copy the snippet into `~/.wakatime.cfg` and restart your editor (details below). Repeat on each computer.
+3. *Optional,* **your own domain:** Cloudflare → your Worker → Settings → Domains & Routes → Add → Custom domain (e.g. `waqt.example.com`).
+4. *Optional,* **keep WakaTime and import your history:** add your key from [wakatime.com/api-key](https://wakatime.com/api-key) to the Worker as a **Secret** named `WAKATIME_API_KEY` (see below), then Setup → **Import from WakaTime**.
+5. *Optional,* **GitHub side of your copy** (Settings → Secrets and variables → Actions on GitHub, *not* in Cloudflare):
+   - weekly backups: secret `WAQT_API_KEY` (your main key) and variable `WAQT_URL` (your Waqt address);
+   - updates: allow Actions to open pull requests (Settings → Actions → General → "Allow GitHub Actions to create and approve pull requests"), or set the variable `WAQT_UPDATE_MODE` to `direct`.
+
+> **Common mix-ups:** Cloudflare variables are for the Worker (`API_KEY`, `WAKATIME_API_KEY`); GitHub variables are for the workflows (`WAQT_URL`, `WAQT_UPDATE_MODE`, backups). Add keys in Cloudflare as **Secret**, not Text. The WakaTime key comes from [wakatime.com/api-key](https://wakatime.com/api-key), not the OAuth page.
 
 ## Connect your editors
 
@@ -79,7 +105,7 @@ Waqt sends the heartbeats exactly as your editor sent them (AI fields, dependenc
 
 ### Import your WakaTime history
 
-With `WAKATIME_API_KEY` set, open **Setup → Import from WakaTime**. Waqt asks WakaTime for an export of all your heartbeats, your browser counts the time (with the same code the server uses) and Waqt stores compact daily totals, including time of day and AI usage. Only days before Waqt's first heartbeat are imported, so nothing is counted twice. Importing again replaces the previous import, and **Remove imported data** undoes it. You can also upload an export file you downloaded from WakaTime yourself.
+With `WAKATIME_API_KEY` set, open **Setup → Import from WakaTime**. Waqt asks WakaTime for an export of all your heartbeats, your browser counts the time (with the same code the server uses) and Waqt stores compact daily totals, including time of day, AI usage, files and branches. Only days before Waqt's first heartbeat are imported, so nothing is counted twice. WakaTime keeps an export for a while and won't make a new one until it expires, so if the export is a few days old, Waqt fetches the missing days one at a time. Importing again replaces the previous import, and **Remove imported data** undoes it. You can also upload an export file you downloaded from WakaTime yourself.
 
 ## Add stats to your GitHub README
 
@@ -291,7 +317,7 @@ npm run dev                      # http://localhost:8787
 Point a local `~/.wakatime.cfg` at `http://localhost:8787/api/v1` to test with a real editor.
 
 ```bash
-npm test          # 67 tests in the Workers runtime (Vitest + @cloudflare/vitest-plugin)
+npm test          # 69 tests in the Workers runtime (Vitest + @cloudflare/vitest-plugin)
 npm run typecheck
 ```
 
