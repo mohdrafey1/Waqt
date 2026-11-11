@@ -27,10 +27,21 @@ export const withSettings: MiddlewareHandler<AppEnv> = async (c, next) => {
     await ensureMigrated(c.env.DB);
     c.set('settings', await loadSettings(c.env.DB));
   } catch (e) {
-    return c.json(
-      { error: 'Database is not ready. Check that the D1 database is bound as DB, then redeploy.', detail: String(e) },
-      500,
-    );
+    const detail = String(e);
+    if (/exceeded|limit/i.test(detail)) {
+      // Free plan daily limit: editors keep heartbeats offline and resend them on a 5xx.
+      const reset = new Date();
+      reset.setUTCHours(24, 0, 0, 0);
+      c.header('Retry-After', String(Math.max(60, Math.ceil((reset.getTime() - Date.now()) / 1000))));
+      return c.json(
+        {
+          error: `Cloudflare's free daily database limit is used up. It resets at ${reset.toISOString().slice(11, 16)} UTC; editors keep your activity and send it then.`,
+          detail,
+        },
+        503,
+      );
+    }
+    return c.json({ error: 'Database is not ready. Check that the D1 database is bound as DB, then redeploy.', detail }, 500);
   }
   await next();
 };

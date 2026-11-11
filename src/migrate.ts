@@ -42,8 +42,10 @@ export async function ensureMigrated(db: D1Database): Promise<void> {
   try {
     const { results } = await db.prepare('SELECT name FROM d1_migrations').all<{ name: string }>();
     applied = new Set(results.map((r) => r.name));
-  } catch {
-    // No migrations table yet: nothing has been applied.
+  } catch (e) {
+    // No migrations table yet means nothing has been applied. Any other error (such as
+    // the free plan's daily limit) must not be mistaken for an empty database.
+    if (!/no such table/i.test(String(e))) throw e;
   }
   const pending = MIGRATIONS.filter(([name]) => !applied.has(name));
   if (pending.length) {

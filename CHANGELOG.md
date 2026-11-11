@@ -7,6 +7,7 @@ dashboard tells you when a new version is out.
 ## 1.2.1 · 2026-11-11
 
 ### Fixed
+- When the free plan's daily database limit is used up, Waqt says so (instead of "Database is not ready") and asks editors to resend later, so no activity is lost.
 - **Far fewer database reads**, so busy days stay inside the free plan's 5 million a day. A year of stats reads each row about four times instead of sixteen, long ranges in the dashboard are cached for 5 minutes, and the Setup and Settings pages no longer count whole tables (the heartbeat count, backup info and import totals now cost a handful of reads).
 - Browser extensions and web-view apps (user agents starting with `Mozilla/5.0`) now show as Chrome, Safari, Firefox, Edge, Slack and so on, instead of "AppleWebKit", and imports no longer list "Mozilla" as an AI model.
 - AI model names stored before Waqt kept raw user agents are tidied, e.g. "Opus 5-5" becomes "Opus 5.5".

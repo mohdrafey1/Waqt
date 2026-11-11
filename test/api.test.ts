@@ -196,3 +196,18 @@ describe('versions', () => {
     expect(s.update_available).toBe(false);
   });
 });
+
+describe('when the free daily database limit is used up', () => {
+  it('says so and asks editors to retry later', async () => {
+    const broken = {
+      prepare: () => {
+        throw new Error("D1_ERROR: Your account has exceeded D1's free tier daily row read limit.");
+      },
+      batch: () => Promise.reject(new Error('exceeded')),
+    };
+    const res = await call('/api/v1/users/current/statusbar/today', { headers: auth }, { DB: broken as any });
+    expect(res.status).toBe(503);
+    expect(Number(res.headers.get('Retry-After'))).toBeGreaterThan(0);
+    expect(((await res.json()) as any).error).toContain('free daily database limit');
+  });
+});
