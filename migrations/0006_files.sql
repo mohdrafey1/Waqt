@@ -10,7 +10,5 @@ CREATE TABLE IF NOT EXISTS daily_files (
   PRIMARY KEY (day, source, project, branch, entity)
 ) WITHOUT ROWID;
 
-CREATE INDEX IF NOT EXISTS daily_files_project ON daily_files (project, day);
-
 INSERT INTO settings (key, value) VALUES ('needs_rebuild', '1')
   ON CONFLICT(key) DO UPDATE SET value = '1';

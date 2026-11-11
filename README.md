@@ -291,7 +291,7 @@ npm run dev                      # http://localhost:8787
 Point a local `~/.wakatime.cfg` at `http://localhost:8787/api/v1` to test with a real editor.
 
 ```bash
-npm test          # 66 tests in the Workers runtime (Vitest + @cloudflare/vitest-plugin)
+npm test          # 67 tests in the Workers runtime (Vitest + @cloudflare/vitest-plugin)
 npm run typecheck
 ```
 

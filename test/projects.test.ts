@@ -59,3 +59,29 @@ describe('files and branches', () => {
     expect((await json('/api/v1/users/current/project?name=detail')).status).toBe(401);
   });
 });
+
+describe('recomputing a day', () => {
+  it('writes only rows that changed', async () => {
+    const { replaceDayStatements } = await import('../src/summaries');
+    const { env } = await import('./helpers');
+    const day = '2019-08-01';
+    const sum = {
+      rows: [['p', 'Go', 'Vim', 'Linux', 'm', 'coding', 120, 0, 0], ['q', 'Go', 'Vim', 'Linux', 'm', 'coding', 60, 0, 0]] as any,
+      hours: [[9, 180]] as any,
+      ai: [] as any,
+      files: [['p', 'main', 'a.go', 120], ['q', 'main', 'b.go', 60]] as any,
+    };
+    const written = async (s: typeof sum) =>
+      (await env.DB.batch(replaceDayStatements(env.DB, day, 'live', s))).reduce((a, r) => a + (r.meta.rows_written || 0), 0);
+    expect(await written(sum)).toBeGreaterThan(0);
+    expect(await written(sum)).toBe(0); // nothing changed, nothing written
+    const changed = { ...sum, rows: [sum.rows[0]], files: [['p', 'main', 'a.go', 150]] as any };
+    const n = await written(changed);
+    expect(n).toBeGreaterThan(0);
+    expect(n).toBeLessThan(10);
+    const rows = await env.DB.prepare('SELECT project, seconds FROM daily_summaries WHERE day = ?1').bind(day).all();
+    expect(rows.results).toEqual([{ project: 'p', seconds: 120 }]);
+    const files = await env.DB.prepare('SELECT entity, seconds FROM daily_files WHERE day = ?1').bind(day).all();
+    expect(files.results).toEqual([{ entity: 'a.go', seconds: 150 }]);
+  });
+});

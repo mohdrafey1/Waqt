@@ -35,37 +35,48 @@ export async function recomputeDay(env: Env, s: Settings, day: string, markedAt:
   ]);
 }
 
-/** Statements that replace one day's totals from one source ('live' or 'import'). */
+// Key and value columns of each daily table (the key columns follow day and source
+// in the primary key).
+const TABLES: [table: string, keys: string[], values: string[]][] = [
+  ['daily_summaries', ['project', 'language', 'editor', 'os', 'machine', 'category'], ['seconds', 'ai_lines', 'human_lines']],
+  ['daily_hours', ['hour'], ['seconds']],
+  ['daily_ai', ['model'], ['seconds', 'sessions', 'prompts', 'input_tokens', 'output_tokens', 'cached_tokens', 'ai_lines']],
+  ['daily_files', ['project', 'branch', 'entity'], ['seconds']],
+];
+
+/**
+ * Statements that make one day's totals from one source ('live' or 'import') match
+ * `sum`. Only rows that changed are written: today is recomputed every few minutes
+ * while you code, and D1's free plan counts every row written (deletes included).
+ */
 export function replaceDayStatements(db: D1Database, day: string, source: string, sum: DaySummary): D1PreparedStatement[] {
-  return [
-    db.prepare('DELETE FROM daily_summaries WHERE day = ?1 AND source = ?2').bind(day, source),
-    db.prepare('DELETE FROM daily_hours WHERE day = ?1 AND source = ?2').bind(day, source),
-    db.prepare('DELETE FROM daily_ai WHERE day = ?1 AND source = ?2').bind(day, source),
-    db.prepare('DELETE FROM daily_files WHERE day = ?1 AND source = ?2').bind(day, source),
-    db.prepare(
-      `INSERT INTO daily_summaries (day, source, project, language, editor, os, machine, category, seconds, ai_lines, human_lines)
-       SELECT ?1, ?2, json_extract(value, '$[0]'), json_extract(value, '$[1]'), json_extract(value, '$[2]'),
-              json_extract(value, '$[3]'), json_extract(value, '$[4]'), json_extract(value, '$[5]'),
-              json_extract(value, '$[6]'), json_extract(value, '$[7]'), json_extract(value, '$[8]')
-       FROM json_each(?3)`,
-    ).bind(day, source, JSON.stringify(sum.rows)),
-    db.prepare(
-      `INSERT INTO daily_hours (day, source, hour, seconds)
-       SELECT ?1, ?2, json_extract(value, '$[0]'), json_extract(value, '$[1]') FROM json_each(?3)`,
-    ).bind(day, source, JSON.stringify(sum.hours)),
-    db.prepare(
-      `INSERT INTO daily_ai (day, source, model, seconds, sessions, prompts, input_tokens, output_tokens, cached_tokens, ai_lines)
-       SELECT ?1, ?2, json_extract(value, '$[0]'), json_extract(value, '$[1]'), json_extract(value, '$[2]'),
-              json_extract(value, '$[3]'), json_extract(value, '$[4]'), json_extract(value, '$[5]'),
-              json_extract(value, '$[6]'), json_extract(value, '$[7]')
-       FROM json_each(?3)`,
-    ).bind(day, source, JSON.stringify(sum.ai)),
-    db.prepare(
-      `INSERT INTO daily_files (day, source, project, branch, entity, seconds)
-       SELECT ?1, ?2, json_extract(value, '$[0]'), json_extract(value, '$[1]'), json_extract(value, '$[2]'), json_extract(value, '$[3]')
-       FROM json_each(?3)`,
-    ).bind(day, source, JSON.stringify(sum.files || [])),
-  ];
+  const data: Record<string, unknown[][]> = {
+    daily_summaries: sum.rows,
+    daily_hours: sum.hours,
+    daily_ai: sum.ai,
+    daily_files: sum.files || [],
+  };
+  const j = (i: number) => `json_extract(j.value, '$[${i}]')`;
+  const out: D1PreparedStatement[] = [];
+  for (const [table, keys, values] of TABLES) {
+    const json = JSON.stringify(data[table]);
+    const cols = [...keys, ...values];
+    out.push(
+      // Rows that no longer exist…
+      db.prepare(
+        `DELETE FROM ${table} WHERE day = ?1 AND source = ?2
+         AND NOT EXISTS (SELECT 1 FROM json_each(?3) AS j WHERE ${keys.map((k, i) => `${j(i)} = ${table}.${k}`).join(' AND ')})`,
+      ).bind(day, source, json),
+      // …then new rows, and changed values only.
+      db.prepare(
+        `INSERT INTO ${table} (day, source, ${cols.join(', ')})
+         SELECT ?1, ?2, ${cols.map((_, i) => j(i)).join(', ')} FROM json_each(?3) AS j WHERE true
+         ON CONFLICT(day, source, ${keys.join(', ')}) DO UPDATE SET ${values.map((v) => `${v} = excluded.${v}`).join(', ')}
+         WHERE ${values.map((v) => `${v} IS NOT excluded.${v}`).join(' OR ')}`,
+      ).bind(day, source, json),
+    );
+  }
+  return out;
 }
 
 type DayRows = { day: string; sum: Omit<DaySummary, 'files'> & { files?: DaySummary['files'] } };
