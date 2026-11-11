@@ -257,6 +257,24 @@
             <p class="muted" style="margin:0;font-size:13px">Your editor can only send to one server, so Waqt can pass every heartbeat on to WakaTime for you. In Cloudflare, open this Worker → <b>Settings → Variables and Secrets → Add</b>, choose <b>Secret</b>, name it <code>WAKATIME_API_KEY</code> and paste your key from <a href="https://wakatime.com/api-key" target="_blank" rel="noopener">wakatime.com/api-key</a>. New activity then goes to both.</p>
           </div>
         </div>
+        <div class="panel section" id="inspector">
+          <div class="panel-head"><h2>Recent heartbeats</h2>
+            <div class="row">
+              <select id="hb-project"><option value="">All projects</option></select>
+              <button class="btn small" id="hb-refresh" type="button">Refresh</button>
+              <button class="btn small" id="hb-reparse" type="button" title="Re-read editor, OS and AI model from the stored user agents">Re-read user agents</button>
+            </div>
+          </div>
+          <p class="muted" style="margin-top:0;font-size:13px">Exactly what your editors sent, newest first. Odd values are highlighted, so plugin quirks are easy to spot. Hover a row to see the full file path and user agent.</p>
+          <div style="overflow-x:auto;max-height:520px;overflow-y:auto">
+            <table class="table" id="hb-table">
+              <thead><tr><th>Time</th><th>Project</th><th>Language</th><th>Editor</th><th>Activity</th><th>AI model</th><th>File</th><th>OS / machine</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <div class="muted" id="hb-status" style="font-size:12.5px;margin-top:8px"></div>
+        </div>
+
         <div class="panel section" id="import-panel">
           <div class="panel-head"><h2>Import your WakaTime history</h2><span class="muted" id="import-summary"></span></div>
           <p class="muted" style="margin-top:0">Bring your past coding time over from WakaTime. Only activity from before Waqt's first heartbeat (<b id="import-cutoff">—</b>) is imported, so nothing is counted twice. Your browser does the counting, then Waqt stores compact daily totals.</p>

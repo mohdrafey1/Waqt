@@ -4,6 +4,7 @@ import { forwardHeartbeats, forwardHost, forwardKey, forwardQueueSize, forwardin
 import { MAX_BATCH, ingest } from '../ingest';
 import { importer } from './importer';
 import { buildReport, sendReport } from '../report';
+import { reparseUserAgents } from '../maintenance';
 import { aliasOf, loadSettings, publicSettingsView, saveSettings, tzOf } from '../settings';
 import { clearCache, getStats, streaks } from '../stats';
 import { README_SECTIONS, renderReadme } from '../readme';
@@ -294,6 +295,32 @@ api.get('/users/current/timesheet', requireAuth, async (c) => {
     .map((r) => ({ ...r, seconds: Math.round(r.seconds) }))
     .sort((a, b) => (a.day < b.day ? -1 : a.day > b.day ? 1 : b.seconds - a.seconds));
   return c.json({ data: { start, end, currency: s.currency, rates: s.label_rates, display_name: s.display_name || s.username, rows } });
+});
+
+// Heartbeat inspector: the latest heartbeats exactly as stored, with the raw user agent.
+api.get('/users/current/heartbeats/recent', requireAuth, async (c) => {
+  const limit = Math.min(200, Math.max(1, Math.trunc(Number(c.req.query('limit'))) || 50));
+  const project = c.req.query('project') || '';
+  const { results } = await c.env.DB.prepare(
+    `SELECT h.time, h.project, h.language, h.editor, h.os, h.machine, h.category, h.branch, h.entity, h.is_write,
+            h.ai_model, h.ai_session, h.ai_line_changes, h.human_line_changes, u.value AS user_agent
+     FROM heartbeats h LEFT JOIN user_agents u ON u.id = h.user_agent_id
+     WHERE (?1 = '' OR h.project = ?1)
+     ORDER BY h.time DESC LIMIT ?2`,
+  )
+    .bind(project, limit)
+    .all();
+  const projects = await c.env.DB.prepare(
+    'SELECT project, MAX(time) AS last FROM heartbeats GROUP BY project ORDER BY last DESC LIMIT 100',
+  ).all<{ project: string }>();
+  return c.json({ data: { heartbeats: results, projects: projects.results.map((p) => p.project) } });
+});
+
+// Re-read every stored user agent now (normally done automatically after upgrades).
+api.post('/users/current/maintenance/reparse', requireAuth, async (c) => {
+  const changed = await reparseUserAgents(c.env, c.get('settings'));
+  await clearCache(c.env);
+  return c.json({ data: { changed } });
 });
 
 // Every project name ever seen (before renames), for the Projects tab.

@@ -73,6 +73,7 @@ function showTab(name) {
   if (name === 'timesheets') loadTimesheet();
   if (name === 'setup') {
     renderSetup();
+    renderInspector();
     renderImport();
   }
   if (name === 'settings') renderSettings();
@@ -516,6 +517,56 @@ function renderSetup() {
           : `<span style="color:var(--ok)">On</span>, to ${esc(settings.forwarding.to)}`
     }</dd>`;
 }
+// ---------- heartbeat inspector ----------
+const MODEL_WORDS = /^(opus|sonnet|haiku|fable|mythos|gpt|gemini|gemma|qwen|deepseek|llama|mistral|grok|kimi|glm|o)\b/i;
+function cell(value, { odd = false, title = '' } = {}) {
+  if (!value) return `<td class="faint"${title ? ` title="${esc(title)}"` : ''}>—</td>`;
+  return `<td${odd ? ' class="odd"' : ''}${title ? ` title="${esc(title)}"` : ''}>${esc(value)}</td>`;
+}
+async function renderInspector() {
+  const project = $('#hb-project').value;
+  try {
+    const { data } = await api(`/users/current/heartbeats/recent?limit=100&project=${encodeURIComponent(project)}`);
+    const sel = $('#hb-project');
+    if (sel.options.length <= 1) sel.innerHTML += data.projects.map((p) => `<option value="${esc(p)}">${esc(p || 'Unknown Project')}</option>`).join('');
+    $('#hb-table').classList.add('compact');
+    $('#hb-table tbody').innerHTML = data.heartbeats.length
+      ? data.heartbeats
+          .map((h) => {
+            const t = new Date(h.time * 1000);
+            const file = (h.entity || '').split(/[\\/]/).pop();
+            const tip = `${h.entity}\n${h.user_agent || '(user agent not stored for older heartbeats)'}${h.branch ? `\nbranch: ${h.branch}` : ''}`;
+            return `<tr title="${esc(tip)}">
+              <td class="num" style="text-align:left">${esc(t.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }))} ${esc(t.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' }))}</td>
+              ${cell(h.project)}
+              ${cell(h.language, { odd: /^<<.*>>$/.test(h.language || '') })}
+              ${cell(h.editor, { odd: MODEL_WORDS.test(h.editor || '') })}
+              ${cell(h.category)}
+              ${cell(h.ai_model)}
+              ${cell(file + (h.is_write ? ' ✎' : ''))}
+              ${cell([h.os, h.machine].filter(Boolean).join(' · '))}
+            </tr>`;
+          })
+          .join('')
+      : '<tr><td colspan="8" class="empty">No heartbeats yet</td></tr>';
+    $('#hb-status').textContent = `${data.heartbeats.length} shown. ✎ = file was saved.`;
+  } catch (e) {
+    $('#hb-status').textContent = e.message;
+  }
+}
+$('#hb-project').addEventListener('change', renderInspector);
+$('#hb-refresh').onclick = renderInspector;
+$('#hb-reparse').onclick = async () => {
+  $('#hb-status').textContent = 'Re-reading user agents…';
+  try {
+    const { data } = await api('/users/current/maintenance/reparse', { method: 'POST' });
+    toast(data.changed ? `Fixed ${data.changed} heartbeats; totals are being rebuilt` : 'Everything was already read correctly');
+    renderInspector();
+  } catch (e) {
+    $('#hb-status').textContent = e.message;
+  }
+};
+
 // ---------- import ----------
 async function renderImport() {
   try {
