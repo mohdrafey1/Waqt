@@ -61,6 +61,7 @@ export interface Settings {
   friends: Friend[]; // other Waqt instances or WakaTime users for the leaderboard
   latest_version: string; // newest version in the main repository, checked daily
   latest_checked: number;
+  import_summary: string; // cached totals of imported history (JSON), '' = work it out again
 }
 
 export const DEFAULTS: Record<string, string> = {
@@ -104,6 +105,7 @@ export const DEFAULTS: Record<string, string> = {
   friends: '[]',
   latest_version: '',
   latest_checked: '0',
+  import_summary: '',
 };
 
 function obj<T>(json: string, check: (v: unknown) => v is T): Record<string, T> {
@@ -175,6 +177,7 @@ function parse(raw: Record<string, string>): Settings {
     })(),
     latest_version: v.latest_version,
     latest_checked: Number(v.latest_checked) || 0,
+    import_summary: v.import_summary,
   };
 }
 

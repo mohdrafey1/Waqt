@@ -258,7 +258,8 @@ api.get('/users/current/summaries', requireDevice, async (c) => {
 api.get('/users/current/settings', requireAuth, async (c) => {
   const s = c.get('settings');
   const counts = await c.env.DB.prepare(
-    `SELECT (SELECT COUNT(*) FROM heartbeats) AS heartbeats,
+    // Row ids grow by one per heartbeat, so this counts them without reading them all.
+    `SELECT COALESCE((SELECT MAX(id) FROM heartbeats) - (SELECT MIN(id) FROM heartbeats) + 1, 0) AS heartbeats,
             (SELECT MIN(day) FROM daily_summaries) AS first_day,
             (SELECT COUNT(*) FROM dirty_days) AS pending_days,
             (SELECT MAX(time) FROM heartbeats) AS last_heartbeat`,
@@ -315,7 +316,10 @@ api.get('/users/current/timesheet', requireAuth, async (c) => {
 // Estimated usage against Cloudflare's free-plan limits.
 api.get('/users/current/usage', requireAuth, async (c) => {
   const report = await usageReport(c.env.DB);
-  const raw = await c.env.DB.prepare('SELECT COUNT(*) AS n FROM heartbeats').first<{ n: number }>();
+  // (One MIN or MAX per SELECT, so SQLite answers each from the index.)
+  const raw = await c.env.DB.prepare(
+    'SELECT COALESCE((SELECT MAX(id) FROM heartbeats) - (SELECT MIN(id) FROM heartbeats) + 1, 0) AS n',
+  ).first<{ n: number }>();
   return c.json({ data: { ...report, raw_heartbeats: raw?.n || 0, raw_retention_days: c.get('settings').raw_retention_days } });
 });
 
@@ -333,7 +337,9 @@ api.get('/users/current/heartbeats/recent', requireAuth, async (c) => {
     .bind(project, limit)
     .all();
   const projects = await c.env.DB.prepare(
-    'SELECT project, MAX(time) AS last FROM heartbeats GROUP BY project ORDER BY last DESC LIMIT 100',
+    // Projects among the latest heartbeats only, so this doesn't read the whole table.
+    `SELECT project, MAX(time) AS last FROM (SELECT project, time FROM heartbeats ORDER BY time DESC LIMIT 3000)
+     GROUP BY project ORDER BY last DESC LIMIT 100`,
   ).all<{ project: string }>();
   return c.json({ data: { heartbeats: results, projects: projects.results.map((p) => p.project) } });
 });

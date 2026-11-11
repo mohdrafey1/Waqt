@@ -19,22 +19,24 @@ const EMPTY_NAMES: Record<Dim, string> = {
 
 // D1 caps compound SELECTs, so instead of UNION ALL we "unpivot" with json_each:
 // each summary row is counted once per dimension, grouped in a single query.
-const STATS_SQL = `
-SELECT d.value AS dim,
-  CASE d.value
-    WHEN 'languages' THEN r.language
-    WHEN 'projects' THEN r.project
-    WHEN 'editors' THEN r.editor
-    WHEN 'operating_systems' THEN r.os
-    WHEN 'machines' THEN r.machine
-    WHEN 'categories' THEN r.category
-    ELSE r.day
-  END AS name,
-  SUM(r.seconds) AS secs, SUM(r.ai_lines) AS ai, SUM(r.human_lines) AS hu
-FROM daily_summaries r
-JOIN json_each('["languages","projects","editors","operating_systems","machines","categories","days"]') d
-WHERE r.day BETWEEN ?1 AND ?2
-GROUP BY dim, name`;
+// Two scans of the range: totals per combination of project, language, editor, OS,
+// machine and category (rolled up per dimension in code), and totals per day.
+// (Unpivoting with a JOIN made D1 count every row once per dimension: 8x the reads.)
+const COMBO_SQL = `SELECT project, language, editor, os, machine, category,
+  SUM(seconds) AS secs, SUM(ai_lines) AS ai, SUM(human_lines) AS hu
+  FROM daily_summaries WHERE day BETWEEN ?1 AND ?2
+  GROUP BY project, language, editor, os, machine, category`;
+const DAYS_SQL = `SELECT day AS name, SUM(seconds) AS secs, SUM(ai_lines) AS ai, SUM(human_lines) AS hu
+  FROM daily_summaries WHERE day BETWEEN ?1 AND ?2 GROUP BY day`;
+
+const DIM_COLUMNS = {
+  languages: 'language',
+  projects: 'project',
+  editors: 'editor',
+  operating_systems: 'os',
+  machines: 'machine',
+  categories: 'category',
+} as const;
 
 interface StatRow {
   dim: string;
@@ -115,16 +117,28 @@ export function dayparts(hours: number[]) {
 
 /** WakaTime-compatible stats object for a range, plus a few extras Waqt uses. */
 export async function buildStats(env: Env, s: Settings, range: Range, view: View) {
-  const [main, hourRes, aiRes, aiDayRes] = await env.DB.batch([
-    env.DB.prepare(STATS_SQL).bind(range.start, range.end),
+  const [comboRes, dayRes, hourRes, aiRes, aiDayRes] = await env.DB.batch([
+    env.DB.prepare(COMBO_SQL).bind(range.start, range.end),
+    env.DB.prepare(DAYS_SQL).bind(range.start, range.end),
     env.DB.prepare(HOURS_SQL).bind(range.start, range.end),
     env.DB.prepare(AI_SQL).bind(range.start, range.end),
     env.DB.prepare(AI_DAYS_SQL).bind(range.start, range.end),
   ]);
-  const results = main.results as unknown as StatRow[];
   const tz = tzOf(s);
-  const grouped: Record<string, StatRow[]> = {};
-  for (const r of results) (grouped[r.dim] ||= []).push(r);
+  const grouped: Record<string, StatRow[]> = { days: (dayRes.results as unknown as StatRow[]).map((r) => ({ ...r, dim: 'days' })) };
+  type Combo = Record<(typeof DIM_COLUMNS)[keyof typeof DIM_COLUMNS], string> & { secs: number; ai: number; hu: number };
+  for (const [dim, col] of Object.entries(DIM_COLUMNS)) {
+    const m = new Map<string, StatRow>();
+    for (const r of comboRes.results as unknown as Combo[]) {
+      const name = r[col] ?? '';
+      const row = m.get(name) || { dim, name, secs: 0, ai: 0, hu: 0 };
+      row.secs += r.secs;
+      row.ai += r.ai || 0;
+      row.hu += r.hu || 0;
+      m.set(name, row);
+    }
+    grouped[dim] = [...m.values()];
+  }
 
   const dayRows = (grouped.days || []).sort((a, b) => (a.name < b.name ? -1 : 1));
   const total = dayRows.reduce((acc, r) => acc + r.secs, 0);
@@ -284,6 +298,12 @@ export async function buildStats(env: Env, s: Settings, range: Range, view: View
 export type Stats = Awaited<ReturnType<typeof buildStats>>;
 
 const PUBLIC_TTL = 600; // seconds
+const PRIVATE_TTL = 300;
+
+function isLongRange(opts: { range?: string; start?: string; end?: string }): boolean {
+  if (opts.start && opts.end) return daysBetween(opts.start, opts.end) > 31;
+  return ['last_30_days', 'last_6_months', 'last_year', 'all_time'].includes(opts.range || '');
+}
 
 /**
  * Public stats go through a small cache so a popular README or website
@@ -299,7 +319,10 @@ export async function getStats(
 
   const key = `stats:v2:${opts.view}:${opts.range || ''}:${opts.start || ''}:${opts.end || ''}:${todayIn(tz)}`;
   const now = Math.floor(Date.now() / 1000);
-  if (opts.view === 'public' && !opts.fresh) {
+  // Public views are cached for 10 minutes; private ones for 5 when the range is long,
+  // since a year of stats reads thousands of rows and barely changes in 5 minutes.
+  const ttl = opts.view === 'public' ? PUBLIC_TTL : isLongRange(opts) ? PRIVATE_TTL : 0;
+  if (ttl && !opts.fresh) {
     const hit = await env.DB.prepare('SELECT value FROM cache WHERE key = ?1 AND expires > ?2')
       .bind(key, now)
       .first<{ value: string }>();
@@ -312,12 +335,12 @@ export async function getStats(
   const range = resolveRange(opts.range, tz, first, opts.start, opts.end)!;
   const stats = await buildStats(env, s, range, opts.view);
 
-  if (opts.view === 'public') {
+  if (ttl) {
     await env.DB.prepare(
       `INSERT INTO cache (key, value, expires) VALUES (?1, ?2, ?3)
        ON CONFLICT(key) DO UPDATE SET value = excluded.value, expires = excluded.expires`,
     )
-      .bind(key, JSON.stringify(stats), now + PUBLIC_TTL)
+      .bind(key, JSON.stringify(stats), now + ttl)
       .run();
   }
   return stats;

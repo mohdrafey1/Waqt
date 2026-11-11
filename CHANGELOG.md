@@ -7,6 +7,7 @@ dashboard tells you when a new version is out.
 ## 1.2.1 · 2026-11-11
 
 ### Fixed
+- **Far fewer database reads**, so busy days stay inside the free plan's 5 million a day. A year of stats reads each row about four times instead of sixteen, long ranges in the dashboard are cached for 5 minutes, and the Setup and Settings pages no longer count whole tables (the heartbeat count, backup info and import totals now cost a handful of reads).
 - Browser extensions and web-view apps (user agents starting with `Mozilla/5.0`) now show as Chrome, Safari, Firefox, Edge, Slack and so on, instead of "AppleWebKit", and imports no longer list "Mozilla" as an AI model.
 - AI model names stored before Waqt kept raw user agents are tidied, e.g. "Opus 5-5" becomes "Opus 5.5".
 - WakaTime now only accepts API keys from plugins, so importing needs your personal OAuth token: add it as a new optional Secret, `WAKATIME_OAUTH_TOKEN` (from wakatime.com/oauth). `WAKATIME_API_KEY` stays for forwarding. **Setup → Test the WakaTime key** checks both, and errors from WakaTime now include WakaTime's own reason.

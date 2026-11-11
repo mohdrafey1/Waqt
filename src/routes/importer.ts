@@ -54,12 +54,25 @@ async function latestHeartbeatsDump(c: C): Promise<Dump | null> {
   return dumps[0] || null;
 }
 
+type ImportSummary = { days: number; first: string | null; last: string | null; seconds: number };
+
+/** Totals of the imported history. Reading them scans every imported row, so they're kept in settings. */
+async function importSummary(c: C, s: Settings): Promise<ImportSummary> {
+  try {
+    if (s.import_summary) return JSON.parse(s.import_summary) as ImportSummary;
+  } catch {}
+  const r = await c.env.DB.prepare(
+    "SELECT COUNT(DISTINCT day) AS days, MIN(day) AS first, MAX(day) AS last, SUM(seconds) AS secs FROM daily_summaries WHERE source = 'import'",
+  ).first<{ days: number; first: string | null; last: string | null; secs: number | null }>();
+  const sum: ImportSummary = { days: r?.days || 0, first: r?.first ?? null, last: r?.last ?? null, seconds: Math.round(r?.secs || 0) };
+  await saveSettings(c.env.DB, { import_summary: JSON.stringify(sum) });
+  return sum;
+}
+
 importer.get('/status', async (c) => {
   const s = c.get('settings');
   const since = await ownSince(c, s);
-  const imported = await c.env.DB.prepare(
-    "SELECT COUNT(DISTINCT day) AS days, MIN(day) AS first, MAX(day) AS last, SUM(seconds) AS secs FROM daily_summaries WHERE source = 'import'",
-  ).first<{ days: number; first: string | null; last: string | null; secs: number | null }>();
+  const imported = await importSummary(c, s);
   return c.json({
     data: {
       wakatime_key: !!importToken(c.env),
@@ -68,7 +81,7 @@ importer.get('/status', async (c) => {
       own_since_day: since ? dayOf(since, tzOf(s)) : null,
       timezone: tzOf(s),
       timeout_minutes: s.timeout_minutes,
-      imported: { days: imported?.days || 0, first: imported?.first, last: imported?.last, seconds: Math.round(imported?.secs || 0) },
+      imported,
     },
   });
 });
@@ -234,12 +247,16 @@ importer.post('/days', async (c) => {
       },
     });
   }
-  if (clean.length) await c.env.DB.batch(replaceDaysStatements(c.env.DB, 'import', clean));
+  if (clean.length) {
+    await c.env.DB.batch(replaceDaysStatements(c.env.DB, 'import', clean));
+    if (s.import_summary) await saveSettings(c.env.DB, { import_summary: '' });
+  }
   return c.json({ data: { stored: clean.length, skipped: days.length - clean.length } });
 });
 
 // Import finished: drop cached public stats so cards show the new history.
 importer.post('/done', async (c) => {
+  await saveSettings(c.env.DB, { import_summary: '' });
   await clearCache(c.env);
   return c.json({ data: { ok: true } });
 });
@@ -252,6 +269,7 @@ importer.delete('/', async (c) => {
     c.env.DB.prepare("DELETE FROM daily_ai WHERE source = 'import'"),
     c.env.DB.prepare("DELETE FROM daily_files WHERE source = 'import'"),
   ]);
+  await saveSettings(c.env.DB, { import_summary: '' });
   await clearCache(c.env);
   return c.json({ data: { ok: true } });
 });

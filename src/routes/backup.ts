@@ -47,6 +47,7 @@ const NOT_BACKED_UP = new Set([
   'last_goal_nudge',
   'last_week_goal_nudge',
   'last_streak_nudge',
+  'import_summary',
 ]);
 
 export const backup = new Hono<AppEnv>();
@@ -54,18 +55,16 @@ backup.use('*', requireAuth);
 
 backup.get('/', async (c) => {
   const s = c.get('settings');
-  const [range, rows, counts] = await c.env.DB.batch([
-    c.env.DB.prepare('SELECT MIN(day) AS first, MAX(day) AS last FROM daily_summaries'),
+  // MIN and MAX of the first key column are index lookups: two rows read, however big the table.
+  const [first_, last_, rows] = await c.env.DB.batch([
+    c.env.DB.prepare('SELECT MIN(day) AS first FROM daily_summaries'),
+    c.env.DB.prepare('SELECT MAX(day) AS last FROM daily_summaries'),
     c.env.DB.prepare('SELECT key, value FROM settings'),
-    c.env.DB.prepare(
-      `SELECT (SELECT COUNT(*) FROM daily_summaries) AS daily_summaries, (SELECT COUNT(*) FROM daily_hours) AS daily_hours,
-              (SELECT COUNT(*) FROM daily_ai) AS daily_ai, (SELECT COUNT(*) FROM daily_files) AS daily_files`,
-    ),
   ]);
   const settings: Record<string, string> = {};
   for (const r of rows.results as { key: string; value: string }[]) if (!NOT_BACKED_UP.has(r.key)) settings[r.key] = r.value;
-  const first = (range.results[0] as { first: string | null }).first;
-  const last = (range.results[0] as { last: string | null }).last;
+  const first = (first_.results[0] as { first: string | null }).first;
+  const last = (last_.results[0] as { last: string | null }).last;
   return c.json({
     data: {
       format: BACKUP_FORMAT,
@@ -76,7 +75,6 @@ backup.get('/', async (c) => {
       last_day: last,
       max_days_per_request: MAX_DAYS,
       settings,
-      rows: counts.results[0],
       tables: Object.fromEntries(Object.entries(TABLES).map(([k, cols]) => [k, { columns: cols.map((x) => x.name) }])),
     },
   });
@@ -206,7 +204,7 @@ backup.post('/restore/done', async (c) => {
   const first = await c.env.DB.prepare('SELECT MIN(time) AS t FROM heartbeats').first<{ t: number | null }>();
   const firstRawDay = first?.t != null ? dayOf(first.t, tz) : todayIn(tz);
   const protectUntil = dayStart(firstRawDay, tz);
-  if (protectUntil > s.raw_since) await saveSettings(c.env.DB, { raw_since: String(protectUntil) });
+  await saveSettings(c.env.DB, { import_summary: '', ...(protectUntil > s.raw_since ? { raw_since: String(protectUntil) } : {}) });
   await clearCache(c.env);
   return c.json({ data: { ok: true, raw_since: Math.max(protectUntil, s.raw_since) } });
 });

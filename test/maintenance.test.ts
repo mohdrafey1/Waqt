@@ -59,3 +59,33 @@ describe('free plan usage meter', () => {
     expect((await json('/api/v1/users/current/usage')).status).toBe(401);
   });
 });
+
+describe('reading costs', () => {
+  const reads = async () => (await json('/api/v1/users/current/usage', { headers: auth })).body.data.today.rows_read as number;
+  const cost = async (path: string) => {
+    const a = await reads();
+    const b = await reads();
+    await json(path, { headers: auth });
+    return (await reads()) - b - (b - a);
+  };
+
+  it('keeps big views cheap on the free plan', async () => {
+    const today = new Date().toISOString().slice(0, 10);
+    const days = Array.from({ length: 100 }, (_, i) => {
+      const d = new Date(Date.parse(today) - (i + 400) * 864e5).toISOString().slice(0, 10);
+      return { day: d, rows: Array.from({ length: 10 }, (_, k) => [`p${k}`, 'Go', 'Vim', 'Linux', 'm', 'coding', 60, 0, 0]), hours: [[9, 600]], ai: [] };
+    });
+    await post('/api/v1/users/current/import/days', { days: days.slice(0, 50) });
+    await post('/api/v1/users/current/import/days', { days: days.slice(50) });
+    const rows = 100 * 10;
+    // A long range reads each row a few times at most, then comes from the cache.
+    const first = await cost('/api/v1/users/current/stats/all_time');
+    expect(first).toBeLessThan(rows * 6);
+    expect(await cost('/api/v1/users/current/stats/all_time')).toBeLessThan(50);
+    // Pages opened all the time read a handful of rows, not whole tables.
+    expect(await cost('/api/v1/users/current/settings')).toBeLessThan(50);
+    expect(await cost('/api/v1/users/current/backup')).toBeLessThan(50);
+    await cost('/api/v1/users/current/import/status');
+    expect(await cost('/api/v1/users/current/import/status')).toBeLessThan(50);
+  });
+});
