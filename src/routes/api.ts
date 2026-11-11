@@ -8,6 +8,7 @@ import { account, auth } from './auth';
 import { buildReport, sendReport } from '../report';
 import { reparseUserAgents } from '../maintenance';
 import { usageReport } from '../usage';
+import { versionInfo } from '../version';
 import { cleanPrices } from '../pricing';
 import { FRIEND_RANGES, MAX_FRIENDS, cleanFriends, leaderboard } from '../friends';
 import { aliasOf, loadSettings, publicSettingsView, saveSettings, tzOf } from '../settings';
@@ -266,6 +267,7 @@ api.get('/users/current/settings', requireAuth, async (c) => {
     data: {
       ...publicSettingsView(s),
       effective_timezone: tzOf(s),
+      ...versionInfo(s),
       stats: counts,
       forwarding: forwardKey(c.env)
         ? { to: forwardHost(c.env), enabled: s.forward_enabled, error: s.forward_error, queued: await forwardQueueSize(c.env) }

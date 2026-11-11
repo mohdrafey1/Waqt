@@ -146,7 +146,13 @@ async function loadOverview() {
       showTab('setup');
     };
   } else {
-    $('#notice').innerHTML = await usageWarning();
+    $('#notice').innerHTML =
+      (await usageWarning()) +
+      (settings.update_available && store('waqt_seen_version') !== settings.latest_version
+        ? `<div class="banner" style="border-left-color:var(--accent)"><b>Waqt ${esc(settings.latest_version)} is out.</b> <a href="${esc(settings.changelog)}" target="_blank" rel="noopener">See what's new</a>, then run <i>Update Waqt</i> in your GitHub copy's Actions tab. <a href="#" id="dismiss-update">Dismiss</a></div>`
+        : '');
+    const dismiss = $('#dismiss-update');
+    if (dismiss) dismiss.onclick = (e) => (e.preventDefault(), store('waqt_seen_version', settings.latest_version), loadOverview());
     document.querySelectorAll('.go-setup').forEach((a) => (a.onclick = (e) => (e.preventDefault(), showTab('setup'))));
   }
 }
@@ -700,6 +706,11 @@ function renderSetup() {
     <dt>Raw heartbeats stored</dt><dd>${(s.heartbeats || 0).toLocaleString()}</dd>
     <dt>History since</dt><dd>${s.first_day ? esc(prettyDate(s.first_day, { year: 'numeric', month: 'short', day: 'numeric' })) : '—'}</dd>
     <dt>Days being recalculated</dt><dd>${s.pending_days || 0}</dd>
+    <dt>Waqt version</dt><dd>${esc(settings.version || '')}${
+      settings.update_available
+        ? ` · <b style="color:var(--warn)">${esc(settings.latest_version)} is out</b> (<a href="${esc(settings.changelog)}" target="_blank" rel="noopener">what's new</a>). Update from your GitHub copy: Actions → Update Waqt → Run workflow.`
+        : ' <span class="faint">(up to date)</span>'
+    }</dd>
     <dt>Time zone</dt><dd>${esc(settings.effective_timezone)}</dd>
     <dt>Also sending to WakaTime</dt><dd>${
       !settings.forwarding

@@ -181,3 +181,18 @@ describe('Waqt Wrapped', () => {
     expect(future).toContain('Nothing to show');
   });
 });
+
+describe('versions', () => {
+  it('reports the running version, matching package.json', async () => {
+    const { VERSION, newer } = await import('../src/version');
+    const pkg = await import('../package.json');
+    expect(VERSION).toBe(pkg.version);
+    expect((await json('/health')).body.version).toBe(VERSION);
+    expect(newer('1.10.0', '1.9.9')).toBe(true);
+    expect(newer('1.2.0', '1.2.0')).toBe(false);
+    expect(newer('1.1.9', '1.2.0')).toBe(false);
+    const s = (await json('/api/v1/users/current/settings', { headers: auth })).body.data;
+    expect(s.version).toBe(VERSION);
+    expect(s.update_available).toBe(false);
+  });
+});

@@ -10,6 +10,8 @@ export interface Env {
   WAKATIME_API_KEY?: string;
   /** Optional: forward somewhere other than WakaTime (any WakaTime-compatible API). */
   WAKATIME_API_URL?: string;
+  /** Where to look for new versions; "off" disables the daily check. */
+  WAQT_VERSION_URL?: string;
 }
 
 export interface Settings {
@@ -52,6 +54,8 @@ export interface Settings {
   statusbar_goal: boolean; // show daily goal progress in the editor status bar
   password_set: boolean; // a dashboard password exists (the hash itself never leaves auth.ts)
   friends: Friend[]; // other Waqt instances or WakaTime users for the leaderboard
+  latest_version: string; // newest version in the main repository, checked daily
+  latest_checked: number;
 }
 
 export const DEFAULTS: Record<string, string> = {
@@ -93,6 +97,8 @@ export const DEFAULTS: Record<string, string> = {
   statusbar_goal: '0',
   dashboard_password: '',
   friends: '[]',
+  latest_version: '',
+  latest_checked: '0',
 };
 
 function obj<T>(json: string, check: (v: unknown) => v is T): Record<string, T> {
@@ -162,6 +168,8 @@ function parse(raw: Record<string, string>): Settings {
         return [];
       }
     })(),
+    latest_version: v.latest_version,
+    latest_checked: Number(v.latest_checked) || 0,
   };
 }
 

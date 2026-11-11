@@ -54,6 +54,9 @@ jobs:
 
           git clone --depth 1 "https://github.com/${UPSTREAM}.git" /tmp/upstream
           NEW_SHA="$(git -C /tmp/upstream rev-parse --short HEAD)"
+          NEW_VERSION="$(jq -r '.version // empty' /tmp/upstream/package.json)"
+          OLD_VERSION="$(jq -r '.version // empty' package.json)"
+          LABEL="${NEW_VERSION:+${NEW_VERSION} (}${NEW_SHA}${NEW_VERSION:+)}"
 
           # Remember this deployment's own settings before copying files over.
           cp wrangler.json /tmp/local-wrangler.json
@@ -107,24 +110,25 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
-          git commit -q -m "Update Waqt to ${UPSTREAM}@${NEW_SHA}"
+          git commit -q -m "Update Waqt to ${LABEL}" -m "From ${UPSTREAM}@${NEW_SHA}. What's new: https://github.com/${UPSTREAM}/blob/HEAD/CHANGELOG.md"
           BRANCH="$(git rev-parse --abbrev-ref HEAD)"
 
           if [ "$MODE" = "direct" ]; then
             git push origin "HEAD:${BRANCH}"
-            echo "### Waqt updated to ${NEW_SHA}" >> "$GITHUB_STEP_SUMMARY"
+            echo "### Waqt updated to ${LABEL}" >> "$GITHUB_STEP_SUMMARY"
             echo "Pushed to \`${BRANCH}\`; Cloudflare is redeploying it now." >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
 
           git push -f origin HEAD:waqt-update
           if [ "$(gh pr view waqt-update --json state -q .state 2>/dev/null || true)" = "OPEN" ]; then
+            gh pr edit waqt-update --title "Update Waqt to ${NEW_VERSION:-${NEW_SHA}}" >/dev/null 2>&1 || true
             echo "Updated the open \"Update Waqt\" pull request." | tee -a "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
-          BODY="This brings your Waqt up to date with [${UPSTREAM}](https://github.com/${UPSTREAM}) (\`${NEW_SHA}\`). Your Worker name, database, routes and variables are kept. Merge it and Cloudflare redeploys automatically; database changes are applied during the deploy."
+          BODY="This brings your Waqt from ${OLD_VERSION:-an older version} to **${NEW_VERSION:-the latest version}** ([${UPSTREAM}](https://github.com/${UPSTREAM}) \`${NEW_SHA}\`). See [what's new](https://github.com/${UPSTREAM}/blob/HEAD/CHANGELOG.md). Your Worker name, database, routes and variables are kept. Merge it and Cloudflare redeploys automatically; database changes are applied during the deploy."
           if [ -n "${WF_NOTE}" ]; then BODY="$(printf '%s\n\n**Note:** %s' "${BODY}" "${WF_NOTE}")"; fi
-          if gh pr create --head waqt-update --base "$BRANCH" --title "Update Waqt" --body "$BODY"; then
+          if gh pr create --head waqt-update --base "$BRANCH" --title "Update Waqt to ${NEW_VERSION:-${NEW_SHA}}" --body "$BODY"; then
             exit 0
           fi
           {

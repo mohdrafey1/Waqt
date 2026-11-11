@@ -17,6 +17,7 @@ export default defineConfig(async () => {
             WAKATIME_API_URL: '',
             WAKATIME_IMPORT_URL: '',
             TELEGRAM_API_URL: '',
+            WAQT_VERSION_URL: 'off',
           },
         },
       }),

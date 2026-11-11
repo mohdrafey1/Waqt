@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { retryForwardQueue } from './forward';
 import { maybeSendWeekly } from './report';
 import { maybeNudge } from './nudges';
+import { VERSION, checkForUpdate } from './version';
 import { type AppEnv, configuredKey } from './http';
 import { reparseUserAgents } from './maintenance';
 import { countRequest, flushUsage, trackDb } from './usage';
@@ -19,7 +20,7 @@ app.route('/api', api);
 app.route('/card', cards);
 app.route('/badge', badges);
 
-app.get('/health', (c) => c.json({ ok: true, configured: !!configuredKey(c.env) }));
+app.get('/health', (c) => c.json({ ok: true, configured: !!configuredKey(c.env), version: VERSION }));
 
 app.notFound((c) => c.json({ error: 'Not found' }, 404));
 app.onError((err, c) => {
@@ -55,6 +56,7 @@ export default {
         await retryForwardQueue(env, s);
         await maybeSendWeekly(env, s);
         await maybeNudge(env, s).catch((e) => console.error('nudge failed', e));
+        await checkForUpdate(env, s);
         await flushUsage(rawEnv.DB, true);
       })(),
     );
