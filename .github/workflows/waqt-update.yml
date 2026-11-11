@@ -1,0 +1,113 @@
+# Keeps your copy of Waqt up to date.
+#
+# The "Deploy to Cloudflare" button makes a separate copy of Waqt (not a fork), so
+# new versions don't arrive by themselves. Once a week this workflow pulls the
+# latest Waqt from the main repository, keeps your own Worker name, database ID,
+# routes and variables, and then either:
+#   - opens a pull request called "Update Waqt" (default), or
+#   - pushes straight to your branch, so Cloudflare redeploys automatically,
+#     if you set the repository variable WAQT_UPDATE_MODE to "direct"
+#     (Settings → Secrets and variables → Actions → Variables).
+#
+# Run it any time from the Actions tab ("Update Waqt" → Run workflow).
+# In the main Waqt repository itself it does nothing.
+
+name: Update Waqt
+
+on:
+  schedule:
+    - cron: '23 4 * * 1' # Mondays 04:23 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency: waqt-update
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Pull the latest Waqt
+        env:
+          UPSTREAM: ${{ vars.WAQT_UPSTREAM || 'mohdrafey1/waqt' }}
+          MODE: ${{ vars.WAQT_UPDATE_MODE || 'pr' }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if [ "${GITHUB_REPOSITORY,,}" = "${UPSTREAM,,}" ]; then
+            echo "This is the main Waqt repository; nothing to update."
+            exit 0
+          fi
+
+          git clone --depth 1 "https://github.com/${UPSTREAM}.git" /tmp/upstream
+          NEW_SHA="$(git -C /tmp/upstream rev-parse --short HEAD)"
+
+          # Remember this deployment's own settings before copying files over.
+          cp wrangler.json /tmp/local-wrangler.json
+          cp package.json /tmp/local-package.json
+
+          rm -rf /tmp/upstream/.git
+          cp -a /tmp/upstream/. ./
+
+          # wrangler.json: the new file, but with your Worker name, database IDs,
+          # routes/custom domains, workers.dev setting, account and variables.
+          jq --slurpfile mine /tmp/local-wrangler.json '
+            ($mine[0]) as $l
+            | .name = $l.name
+            | .d1_databases = [ (.d1_databases // [])[] as $db
+                | ([($l.d1_databases // [])[] | select(.binding == $db.binding)] | first) as $m
+                | if $m then $db + {database_id: $m.database_id, database_name: $m.database_name} else $db end ]
+            | (if $l.routes then .routes = $l.routes else . end)
+            | (if $l.route then .route = $l.route else . end)
+            | (if $l.workers_dev != null then .workers_dev = $l.workers_dev else . end)
+            | (if $l.account_id then .account_id = $l.account_id else . end)
+            | (if $l.vars then .vars = ((.vars // {}) + $l.vars) else . end)
+          ' wrangler.json > /tmp/wrangler.json
+          mv /tmp/wrangler.json wrangler.json
+
+          NAME="$(jq -r .name /tmp/local-package.json)"
+          jq --arg n "$NAME" '.name = $n' package.json > /tmp/package.json && mv /tmp/package.json package.json
+          if [ -f package-lock.json ]; then
+            jq --arg n "$NAME" '.name = $n | (if .packages[""] then .packages[""].name = $n else . end)' package-lock.json > /tmp/lock.json
+            mv /tmp/lock.json package-lock.json
+          fi
+
+          if git diff --quiet && [ -z "$(git ls-files --others --exclude-standard)" ]; then
+            echo "Already up to date with ${UPSTREAM}@${NEW_SHA}."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -q -m "Update Waqt to ${UPSTREAM}@${NEW_SHA}"
+          BRANCH="$(git rev-parse --abbrev-ref HEAD)"
+
+          if [ "$MODE" = "direct" ]; then
+            git push origin "HEAD:${BRANCH}"
+            echo "### Waqt updated to ${NEW_SHA}" >> "$GITHUB_STEP_SUMMARY"
+            echo "Pushed to \`${BRANCH}\`; Cloudflare is redeploying it now." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          git push -f origin HEAD:waqt-update
+          if [ "$(gh pr view waqt-update --json state -q .state 2>/dev/null || true)" = "OPEN" ]; then
+            echo "Updated the open \"Update Waqt\" pull request." | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          BODY="This brings your Waqt up to date with [${UPSTREAM}](https://github.com/${UPSTREAM}) (\`${NEW_SHA}\`). Your Worker name, database, routes and variables are kept. Merge it and Cloudflare redeploys automatically; database changes are applied during the deploy."
+          if gh pr create --head waqt-update --base "$BRANCH" --title "Update Waqt" --body "$BODY"; then
+            exit 0
+          fi
+          {
+            echo "### A Waqt update is ready"
+            echo "GitHub didn't let this workflow open a pull request. Either:"
+            echo "- open it yourself: https://github.com/${GITHUB_REPOSITORY}/compare/${BRANCH}...waqt-update, or"
+            echo "- allow it in Settings → Actions → General → \"Allow GitHub Actions to create and approve pull requests\", or"
+            echo "- set the repository variable \`WAQT_UPDATE_MODE\` to \`direct\` to apply updates automatically."
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::warning::Update pushed to the waqt-update branch, but no pull request could be opened. See the run summary."
