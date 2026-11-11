@@ -3,6 +3,7 @@ import { type C, type AppEnv, cors, requireAuth, viewFor, withSettings } from '.
 import { forwardHeartbeats, forwardHost, forwardKey, forwardQueueSize, forwardingEnabled } from '../forward';
 import { MAX_BATCH, ingest } from '../ingest';
 import { importer } from './importer';
+import { backup } from './backup';
 import { buildReport, sendReport } from '../report';
 import { reparseUserAgents } from '../maintenance';
 import { usageReport } from '../usage';
@@ -511,3 +512,4 @@ api.put('/users/current/settings', requireAuth, async (c) => {
 });
 
 api.route('/users/current/import', importer);
+api.route('/users/current/backup', backup);

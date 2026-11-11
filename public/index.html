@@ -320,6 +320,20 @@
             <div class="muted" id="import-status" style="margin-top:8px;font-size:13px"></div>
           </div>
         </div>
+
+        <div class="panel section" id="backup-panel">
+          <div class="panel-head"><h2>Backups</h2><span class="muted" id="backup-summary"></span></div>
+          <p class="muted" style="margin-top:0">A backup holds your full history (the daily totals behind every chart, card and API answer) and your settings. Secrets such as report webhooks are left out, and so are raw heartbeats.</p>
+          <p class="muted"><b>Automatic weekly backups:</b> in your <b>private</b> GitHub copy of Waqt, add the secret <code>WAQT_API_KEY</code> (your key) and the variable <code>WAQT_URL</code> (<span id="backup-url"></span>) under Settings → Secrets and variables → Actions. Every Sunday the <i>Back up Waqt</i> workflow saves one as a release, keeping the last 12.</p>
+          <div class="row">
+            <button class="btn primary" id="backup-download" type="button">Download a backup</button>
+            <label class="btn" style="cursor:pointer">Restore a backup<input type="file" id="backup-file" accept=".gz,.json,application/json,application/gzip" hidden></label>
+          </div>
+          <div id="backup-progress" class="hidden" style="margin-top:16px">
+            <div class="track" style="height:8px;background:var(--panel-2);border-radius:5px;overflow:hidden"><div id="backup-bar" style="height:100%;width:0;background:var(--accent);transition:width .3s"></div></div>
+            <div class="muted" id="backup-status" style="margin-top:8px;font-size:13px"></div>
+          </div>
+        </div>
       </section>
 
       <!-- Settings -->

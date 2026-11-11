@@ -40,7 +40,7 @@ export interface Settings {
   parser_version: number; // user-agent parser version the stored heartbeats were read with
 }
 
-const DEFAULTS: Record<string, string> = {
+export const DEFAULTS: Record<string, string> = {
   timezone: '',
   username: 'me',
   display_name: '',

@@ -1,4 +1,5 @@
 import { runImport } from './import.js';
+import { createBackup, restoreBackup } from './lib/backup.js';
 import { LOGO, addDays, barList, compact, copy, dailyBars, esc, fmt, heatmap, hourBars, prettyDate, toast, weekdayBars } from './shared.js';
 
 const $ = (s) => document.querySelector(s);
@@ -75,6 +76,7 @@ function showTab(name) {
     renderSetup();
     renderUsage();
     renderInspector();
+    renderBackup();
     renderImport();
   }
   if (name === 'settings') renderSettings();
@@ -690,6 +692,74 @@ $('#import-remove').onclick = async () => {
   await api('/users/current/import', { method: 'DELETE' });
   toast('Imported history removed');
   renderImport();
+};
+
+// ---------- backups ----------
+function backupProgress(msg, pct) {
+  $('#backup-progress').classList.remove('hidden');
+  $('#backup-status').textContent = msg;
+  if (pct != null) $('#backup-bar').style.width = Math.min(100, pct) + '%';
+}
+async function renderBackup() {
+  $('#backup-url').innerHTML = `<code>${esc(location.origin)}</code>`;
+  try {
+    const { data: m } = await api('/users/current/backup');
+    $('#backup-summary').textContent = m.first_day ? `History from ${prettyDate(m.first_day, { year: 'numeric', month: 'short', day: 'numeric' })}` : 'Nothing to back up yet';
+  } catch (e) {
+    $('#backup-summary').textContent = e.message;
+  }
+}
+async function gzip(text) {
+  if (typeof CompressionStream === 'undefined') return { blob: new Blob([text], { type: 'application/json' }), ext: 'json' };
+  const stream = new Blob([text]).stream().pipeThrough(new CompressionStream('gzip'));
+  return { blob: await new Response(stream).blob(), ext: 'json.gz' };
+}
+async function readBackupFile(file) {
+  const head = new Uint8Array(await file.slice(0, 2).arrayBuffer());
+  if (head[0] === 0x1f && head[1] === 0x8b) {
+    const stream = file.stream().pipeThrough(new DecompressionStream('gzip'));
+    return JSON.parse(await new Response(stream).text());
+  }
+  return JSON.parse(await file.text());
+}
+$('#backup-download').onclick = async () => {
+  $('#backup-download').disabled = true;
+  try {
+    const b = await createBackup(api, backupProgress);
+    const { blob, ext } = await gzip(JSON.stringify(b));
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `waqt-backup-${localToday()}.${ext}`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    const rows = Object.values(b.tables).reduce((n, t) => n + t.rows.length, 0);
+    backupProgress(`Saved ${a.download} (${rows.toLocaleString()} rows, ${(blob.size / 1024).toFixed(0)} KB).`, 100);
+  } catch (e) {
+    backupProgress('Backup failed: ' + e.message);
+  }
+  $('#backup-download').disabled = false;
+};
+$('#backup-file').onchange = async (e) => {
+  const file = e.target.files[0];
+  e.target.value = '';
+  if (!file) return;
+  let b;
+  try {
+    b = await readBackupFile(file);
+  } catch {
+    backupProgress('That file is not a Waqt backup.');
+    return;
+  }
+  const range = b.first_day ? `${b.first_day} to ${b.last_day}` : 'no days';
+  if (!window.confirm(`Restore ${file.name} (${range})?\n\nDays in the backup replace the same days here, and its settings replace yours. Days not in the backup are kept.`)) return;
+  try {
+    const r = await restoreBackup(api, b, backupProgress);
+    backupProgress(`Restored ${r.days} days (${r.rows.toLocaleString()} rows). Reloading…`, 100);
+    toast('Backup restored');
+    setTimeout(() => location.reload(), 1500);
+  } catch (err) {
+    backupProgress('Restore stopped: ' + err.message);
+  }
 };
 
 $('#reveal').onclick = () => {

@@ -1,0 +1,83 @@
+# Weekly backup of your Waqt data, saved as a release in this (private) repository.
+#
+# Turn it on in Settings → Secrets and variables → Actions:
+#   - Secrets   → WAQT_API_KEY = your Waqt key
+#   - Variables → WAQT_URL     = your Waqt address, e.g. https://waqt.example.com
+# Optional variables:
+#   - WAQT_BACKUP_KEEP   how many backups to keep (default 12)
+#   - WAQT_BACKUP_PUBLIC set to "true" to allow backups in a public repository
+#                        (anyone could download them, so this is off by default)
+#
+# Each backup is a release called "backup-YYYY-MM-DD" with a .json.gz file. Restore
+# one from the dashboard (Setup → Backups) or with scripts/backup.mjs restore.
+# Run it any time from the Actions tab ("Back up Waqt" → Run workflow).
+
+name: Back up Waqt
+
+on:
+  schedule:
+    - cron: '37 2 * * 0' # Sundays 02:37 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency: waqt-backup
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check setup
+        id: check
+        env:
+          WAQT_URL: ${{ vars.WAQT_URL }}
+          HAS_KEY: ${{ secrets.WAQT_API_KEY != '' }}
+          ALLOW_PUBLIC: ${{ vars.WAQT_BACKUP_PUBLIC }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if [ -z "${WAQT_URL}" ] || [ "${HAS_KEY}" != "true" ]; then
+            echo "::notice::Backups are off. Add the WAQT_API_KEY secret and the WAQT_URL variable to turn them on."
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          PRIVATE="$(gh api "repos/${GITHUB_REPOSITORY}" --jq .private)"
+          if [ "${PRIVATE}" != "true" ] && [ "${ALLOW_PUBLIC}" != "true" ]; then
+            echo "::error::This repository is public, so anyone could download the backups. Make it private, or set the variable WAQT_BACKUP_PUBLIC to true."
+            exit 1
+          fi
+          echo "run=true" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v4
+        if: steps.check.outputs.run == 'true'
+
+      - uses: actions/setup-node@v4
+        if: steps.check.outputs.run == 'true'
+        with:
+          node-version: 22
+
+      - name: Back up
+        if: steps.check.outputs.run == 'true'
+        env:
+          WAQT_URL: ${{ vars.WAQT_URL }}
+          WAQT_API_KEY: ${{ secrets.WAQT_API_KEY }}
+          KEEP: ${{ vars.WAQT_BACKUP_KEEP || '12' }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          DAY="$(date -u +%F)"
+          FILE="waqt-backup-${DAY}.json.gz"
+          node scripts/backup.mjs backup "${FILE}"
+
+          TAG="backup-${DAY}"
+          gh release delete "${TAG}" --yes --cleanup-tag >/dev/null 2>&1 || true
+          gh release create "${TAG}" "${FILE}" --title "Waqt backup ${DAY}" --latest=false \
+            --notes "Weekly backup of ${WAQT_URL}. Restore it from the dashboard (Setup → Backups) or with \`node scripts/backup.mjs restore ${FILE}\`."
+
+          # Keep only the newest backups.
+          gh release list --limit 500 --json tagName --jq '.[].tagName' | grep '^backup-' | sort -r | tail -n "+$((KEEP + 1))" |
+            while read -r OLD; do gh release delete "${OLD}" --yes --cleanup-tag; done
+
+          echo "### Backed up to ${TAG}" >> "$GITHUB_STEP_SUMMARY"
+          ls -lh "${FILE}" | awk '{print "Size: " $5}' >> "$GITHUB_STEP_SUMMARY"
