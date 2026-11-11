@@ -23,13 +23,19 @@ WakaTime's free plan only keeps 1 week of history. Waqt is a small server you ru
 - **Your full history, forever.** Daily totals are never deleted, and you can **import your old WakaTime history** in one click.
 - **A private dashboard** with projects, languages, editors, activity type, OS, machines, time of day, days of the week and a year heatmap.
 - **AI insights.** Time spent with AI agents, the share of lines written by AI vs. you, sessions, prompts, tokens and time per model (Claude Code, Cursor, Copilot, Codex…).
-- **Tidy projects.** Rename or merge projects and label them, for example by client.
-- **Goals and a weekly report** to Discord or Telegram every Monday.
+- **Tidy projects.** Rename or merge projects and label them, for example by client. Open any project to see its **files and branches**.
+- **Goals, nudges and a weekly report** to Discord or Telegram: a message when you hit a goal or your streak is about to end, and goal progress right in your editor's status bar.
+- **AI cost estimate.** What your token use would cost at API list prices, from a price table you can edit.
 - **Timesheets** with hourly rates per client, CSV export and printable invoices.
 - **README cards, badges and a stats block** for your GitHub profile, plus **a public profile page** you can share or embed on your portfolio.
+- **Waqt Wrapped.** Your year in code as shareable slides and an image.
+- **A friends leaderboard** with anyone who has a public Waqt or WakaTime profile.
 - **Keep WakaTime too, if you want.** Waqt can pass every heartbeat on to WakaTime (with retries), so your WakaTime account and anything built on it keep working.
 - **Privacy by default.** Project names, labels, machine names and file paths are never public unless you say so.
-- **Updates arrive by themselves** through a weekly GitHub Action in your copy.
+- **Safe keys.** Each editor gets its own revocable key that can only send activity; the dashboard has its own password and secure sign-in.
+- **Backups** you can download, restore, or have saved weekly to your private GitHub repository.
+- **Updates arrive by themselves** through a weekly GitHub Action in your copy, and the dashboard tells you what's new.
+- **Stays inside the free plan,** with a usage meter that warns you long before any limit.
 - **₹0 / $0.** No credit card, no subscription. Cloudflare's free plan is plenty for one person.
 
 ![AI insights](docs/ai.png)
@@ -42,7 +48,7 @@ WakaTime's free plan only keeps 1 week of history. Waqt is a small server you ru
    ```
    or use [uuidgenerator.net/version4](https://www.uuidgenerator.net/version4). Keep it somewhere safe.
 2. **Click [Deploy to Cloudflare](https://deploy.workers.cloudflare.com/?url=https://github.com/mohdrafey1/waqt).** Sign in (or sign up free), connect GitHub, and paste your key into the `API_KEY` field. Cloudflare copies this repo to your GitHub, creates the database, and deploys it.
-3. **Open your Worker URL** (something like `https://waqt.<you>.workers.dev`) and sign in with your key.
+3. **Open your Worker URL** (something like `https://waqt.<you>.workers.dev`) and sign in with your key. Then set a dashboard password in **Settings → Sign-in and device keys**, so you don't need to paste the key into browsers again.
 
 Every push to your copy of the repo redeploys automatically.
 
@@ -53,11 +59,17 @@ Every push to your copy of the repo redeploys automatically.
    ```ini
    [settings]
    api_url = https://waqt.<you>.workers.dev/api/v1
-   api_key = <your key>
+   api_key = <a device key>
    ```
 3. Restart your editor. After a couple of minutes your status bar shows today's time and the dashboard fills in.
 
-The dashboard's **Setup** tab shows this snippet with your real URL filled in.
+The dashboard's **Setup** tab shows this snippet with your real URL filled in. Click **Create a key for this device** to get a key just for this editor or computer (your main `API_KEY` works too).
+
+### Keys and signing in
+
+- **Device keys** can send heartbeats and read your stats, which is all an editor needs. They can't open the dashboard or change settings, backups or other keys. Create one per computer in **Setup**; revoke it any time in **Settings → Sign-in and device keys**. Waqt stores only a SHA-256 fingerprint, so a copy of the database doesn't reveal them.
+- **The dashboard** signs in with your password (or the main key) and keeps you signed in for 30 days with an HttpOnly, Secure, SameSite=Strict cookie. Password guesses are rate limited, and Settings lists signed-in browsers with a button to sign out the others.
+- **The main key** (`API_KEY` secret) always works for everything. Keep it for emergencies and automation such as backups.
 
 ### Keep sending to WakaTime too (optional)
 
@@ -92,7 +104,7 @@ Turn on **Public profile** in Settings (it's on by default), then use the **Shar
 ![Coding time](https://waqt.<you>.workers.dev/badge/last_7_days.svg)
 ```
 
-**Cards:** `languages`, `editors`, `os`, `categories`, `projects` (only if project names are public), `stats`, `heatmap`, `hours`, `ai`.
+**Cards:** `languages`, `editors`, `os`, `categories`, `projects` (only if project names are public), `stats`, `heatmap`, `hours`, `ai`, `wrapped` (see below).
 
 | Option | Values | Default |
 | --- | --- | --- |
@@ -108,6 +120,18 @@ Turn on **Public profile** in Settings (it's on by default), then use the **Shar
 | `cache_seconds` | 300–86400 | `1800` |
 
 **Badges:** `/badge/<range>.svg` with optional `label`, `color` (hex) and `style=flat-square`. A [Shields.io endpoint](https://shields.io/badges/endpoint-badge) is at `/badge/<range>.json`.
+
+### Waqt Wrapped
+
+`/wrapped/` walks through your year in code: total time, active days and longest streak, languages, when you code, your tools, AI use and (if public) projects. It ends with a card you can download as an image, post to X or LinkedIn, or embed:
+
+<img src="docs/wrapped.svg" width="600" alt="Waqt Wrapped card">
+
+```md
+[![My 2026 in code](https://waqt.<you>.workers.dev/card/wrapped.svg?year=2026)](https://waqt.<you>.workers.dev/wrapped/?year=2026)
+```
+
+Wrapped uses your public stats, so it shows exactly what anyone else would see. Add `?year=2025` for earlier years.
 
 ### A stats block in your profile README
 
@@ -154,12 +178,23 @@ The public profile lives at `https://waqt.<you>.workers.dev/profile/`. To embed 
 
 Options: `range` (`last_7_days`, `last_30_days`, `last_year`, `all_time`), `theme` (`auto`, `dark`, `light`), `sections` (`stats`, `heatmap`, `daily`, `hours`, `ai`, `languages`, `editors`, `categories`, `os`, `projects`). The SVG cards above also work as plain `<img>` tags on any site, and every public JSON endpoint sends CORS headers so you can build your own widget.
 
-## Goals, weekly reports and timesheets
+## Goals, reports, friends and timesheets
 
-- **Goals:** set a daily and/or weekly goal in **Settings**. Progress bars show on the Overview.
+- **Goals:** set a daily and/or weekly goal in **Settings**. Progress bars show on the Overview, and **Show daily goal progress in my editor** makes the status bar read e.g. `1 hr 20 mins · 67% of 2 hrs`.
+- **Nudges:** with a Discord or Telegram channel set up, Waqt can message you when you reach a goal, and remind you at an hour you pick (21:00 by default) when a streak of two days or more would end at midnight. Each goes out once.
 - **Weekly report:** add a Discord webhook (Server settings → Integrations → Webhooks) and/or a Telegram bot (create one with @BotFather, get your chat ID from @userinfobot). Every Monday from 9:00 your time you get last week's total vs. the week before, goal hits, best day, top languages, projects and labels, AI use and your streak. **Send a test report** tries it right away.
-- **Projects tab:** rename projects, merge several into one by giving them the same name, label them (e.g. by client) and hide them from public views.
+- **Projects tab:** rename projects, merge several into one by giving them the same name, label them (e.g. by client) and hide them from public views. Click a project for its daily time, branches, languages, editors and busiest files (paths relative to the project folder; private).
+- **AI tab:** besides agent time, lines, sessions and models, a **cost estimate** turns your token counts into what they'd cost at API list prices (USD per million input, output and cached tokens). Edit the price table to match your models; the longest matching name wins. It's private unless you choose to show it on your profile, cards and README.
+- **Friends tab:** a private leaderboard for the last 7 or 30 days with up to 25 friends who have a public Waqt (`https://their-waqt.example.com`) or WakaTime profile (`https://wakatime.com/@name`).
 - **Timesheets tab:** pick a period, group by label or project, round each day up to 6/15/30/60 minutes, set an hourly rate per label and a currency, then **Export CSV** or **Print invoice** (Save as PDF works too).
+
+## Backups
+
+A backup holds every daily total (everything the dashboard, cards and API show) and your settings, as a small `.json.gz` file. Secrets such as webhooks and your password are left out, and so are raw heartbeats.
+
+- **By hand:** Setup → Backups → **Download a backup** or **Restore a backup**. Restoring replaces the same days and keeps the rest, so you can also use it to move to a new Cloudflare account.
+- **Every week, automatically:** in your **private** GitHub copy, add the secret `WAQT_API_KEY` (your main key) and the variable `WAQT_URL` (your Waqt address) under Settings → Secrets and variables → Actions. The *Back up Waqt* workflow then saves a backup as a release every Sunday and keeps the last 12 (`WAQT_BACKUP_KEEP` changes that). It refuses to run in a public repository unless you set `WAQT_BACKUP_PUBLIC` to `true`.
+- **From a terminal:** `WAQT_URL=… WAQT_API_KEY=… node scripts/backup.mjs backup` (or `restore waqt-backup-2026-11-15.json.gz`).
 
 ## Staying up to date
 
@@ -168,6 +203,8 @@ The Deploy button makes a copy of Waqt in your GitHub account (not a fork), so u
 - To apply updates automatically instead, add the repository variable `WAQT_UPDATE_MODE` = `direct` (Settings → Secrets and variables → Actions → Variables).
 - If GitHub doesn't allow the workflow to open pull requests, the run summary links to the ready-made branch, or allow it in Settings → Actions → General → "Allow GitHub Actions to create and approve pull requests".
 - You can run it any time from the **Actions** tab.
+- GitHub doesn't let a workflow change files in `.github/workflows` with its own token. When those change, the run lists them for you to copy by hand. To include them automatically, add a secret `WAQT_UPDATE_TOKEN`: a [fine-grained token](https://github.com/settings/personal-access-tokens/new) for your copy with **Contents**, **Pull requests** and **Workflows** set to read and write.
+- The dashboard shows your version (Setup → Status) and tells you when a new one is out. See the [changelog](CHANGELOG.md) for what changed.
 
 ## Works with WakaTime tools
 
@@ -207,6 +244,8 @@ Yes, for one person. Rough numbers for a heavy coder:
 | D1 rows read | 5,000,000 / day | well under 10% |
 | D1 storage | 5 GB (500 MB per database) | ~150 MB per year of raw data |
 
+**Setup → Cloudflare free plan usage** shows today's requests, database reads and writes and the database size against these limits, and the Overview warns you at 70%.
+
 To stay under the 500 MB limit, raw heartbeats older than **365 days** are deleted by a daily job (change it in Settings, `0` = keep forever). Daily totals per project, language, editor, OS, machine and activity are **kept forever**, so your all-time stats and heatmap never lose history. Public stats are cached for 10 minutes so a busy README doesn't use up your reads.
 
 ## How it works
@@ -231,9 +270,12 @@ Time is counted the way WakaTime counts it: each heartbeat gets credit for the g
 | `src/summaries.ts` | turns heartbeats into daily totals, pruning |
 | `src/stats.ts` | stats queries and the public cache |
 | `src/forward.ts` | optional forwarding to WakaTime, with a retry queue |
-| `src/report.ts` | weekly report to Discord / Telegram |
+| `src/report.ts`, `src/nudges.ts` | weekly report, goal and streak messages to Discord / Telegram |
+| `src/auth.ts`, `src/routes/auth.ts` | device keys, dashboard password and sessions |
+| `src/routes/backup.ts`, `public/lib/backup.js`, `scripts/backup.mjs` | backups and restore |
+| `src/friends.ts`, `src/pricing.ts`, `src/usage.ts`, `src/version.ts` | friends leaderboard, AI cost estimate, free-plan meter, update check |
 | `src/readme.ts`, `readme-action/` | the profile README stats block and its GitHub Action |
-| `public/` | dashboard and profile page (plain HTML/JS, no build step) |
+| `public/` | dashboard, profile page and Wrapped (plain HTML/JS, no build step) |
 | `migrations/` | D1 schema |
 | `test/` | tests that run inside the Workers runtime |
 
@@ -249,7 +291,7 @@ npm run dev                      # http://localhost:8787
 Point a local `~/.wakatime.cfg` at `http://localhost:8787/api/v1` to test with a real editor.
 
 ```bash
-npm test          # 38 tests in the Workers runtime (Vitest + @cloudflare/vitest-plugin)
+npm test          # 66 tests in the Workers runtime (Vitest + @cloudflare/vitest-plugin)
 npm run typecheck
 ```
 
@@ -264,13 +306,15 @@ npm run deploy                       # applies migrations, then deploys
 
 ## FAQ
 
-**Does any data go to WakaTime?** No. The plugins only talk to the `api_url` you set.
+**Does any data go to WakaTime?** Only if you turn on forwarding with the `WAKATIME_API_KEY` secret. Otherwise the plugins only talk to the `api_url` you set.
 
 **Can I import my old WakaTime history?** Yes: Setup → Import from WakaTime (needs the `WAKATIME_API_KEY` secret).
 
 **Is it multi-user?** No. One instance per person keeps it simple and inside the free plan. Anyone can deploy their own with the button above.
 
-**I lost my key.** Set a new one in the Cloudflare dashboard → Workers → waqt → Settings → Variables and Secrets, then update `~/.wakatime.cfg`.
+**I lost my key.** Device keys: revoke the old one in Settings and create a new one in Setup. The main key: set a new `API_KEY` in the Cloudflare dashboard → Workers → waqt → Settings → Variables and Secrets (and update anything that used it).
+
+**I forgot my dashboard password.** Sign in with the main key instead, then set a new password in Settings.
 
 ## License
 
