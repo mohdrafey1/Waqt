@@ -5,7 +5,8 @@ import { MAX_BATCH, ingest } from '../ingest';
 import { importer } from './importer';
 import { buildReport, sendReport } from '../report';
 import { aliasOf, loadSettings, publicSettingsView, saveSettings, tzOf } from '../settings';
-import { clearCache, getStats } from '../stats';
+import { clearCache, getStats, streaks } from '../stats';
+import { README_SECTIONS, renderReadme } from '../readme';
 import { flushDirty, markAllRawDaysDirty } from '../summaries';
 import { RANGES, addDays, dayStart, durationText, isDay, isValidTimeZone, todayIn } from '../time';
 
@@ -124,6 +125,22 @@ async function handleStats(c: C) {
 
 api.get('/users/:user/stats/:range', handleStats);
 api.get('/users/:user/stats', handleStats);
+
+// Markdown block for profile READMEs (see readme-action/).
+api.get('/users/:user/readme.md', async (c) => {
+  const view = viewFor(c);
+  if (view === 'unauthorized') return c.text('Unauthorized', 401);
+  if (view === 'denied') return c.text('This profile is private', 403);
+  const s = c.get('settings');
+  const range = c.req.query('range') || 'last_7_days';
+  const st = await getStats(c.env, s, { range, view });
+  if (!st) return c.text(`Unknown range. Use one of: ${Object.keys(RANGES).join(', ')}`, 400);
+  const year = range === 'last_year' ? st : await getStats(c.env, s, { range: 'last_year', view });
+  const sections = (c.req.query('sections') || '').split(',').map((x) => x.trim()).filter((x) => README_SECTIONS.includes(x));
+  c.header('Content-Type', 'text/markdown; charset=utf-8');
+  c.header('Cache-Control', 'no-store');
+  return c.body(renderReadme(st, sections, year ? streaks(year.days, year.end) : null, s.site_url));
+});
 
 api.get('/users/:user/all_time_since_today', async (c) => {
   const view = viewFor(c);

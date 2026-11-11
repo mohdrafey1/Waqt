@@ -1,0 +1,60 @@
+name: Waqt README stats
+description: Write your Waqt coding stats into a README, between <!--START_SECTION:waqt--> and <!--END_SECTION:waqt-->.
+author: Mohd Rafey
+branding:
+  icon: clock
+  color: purple
+
+inputs:
+  url:
+    description: Your Waqt address, for example https://waqt.example.com
+    required: true
+  api_key:
+    description: Optional. Your Waqt API key (store it as a repository secret) to include private data such as project names. Without it, only your public stats are used.
+    required: false
+    default: ''
+  range:
+    description: today, last_7_days, last_30_days, last_6_months, last_year or all_time
+    required: false
+    default: last_7_days
+  sections:
+    description: Comma-separated list from summary, languages, editors, projects, os, categories, hours, weekdays, ai, streak
+    required: false
+    default: summary,languages,editors,projects,os,hours,weekdays,ai,streak
+  readme:
+    description: Path of the file to update
+    required: false
+    default: README.md
+  section_name:
+    description: Name used in the markers, e.g. "waqt" for <!--START_SECTION:waqt-->
+    required: false
+    default: waqt
+  commit:
+    description: Commit and push the change ("true" or "false")
+    required: false
+    default: 'true'
+  commit_message:
+    description: Commit message
+    required: false
+    default: Update coding stats from Waqt
+
+outputs:
+  changed:
+    description: '"true" if the README changed'
+    value: ${{ steps.update.outputs.changed }}
+
+runs:
+  using: composite
+  steps:
+    - id: update
+      shell: bash
+      env:
+        WAQT_URL: ${{ inputs.url }}
+        WAQT_API_KEY: ${{ inputs.api_key }}
+        WAQT_RANGE: ${{ inputs.range }}
+        WAQT_SECTIONS: ${{ inputs.sections }}
+        WAQT_README: ${{ inputs.readme }}
+        WAQT_SECTION_NAME: ${{ inputs.section_name }}
+        WAQT_COMMIT: ${{ inputs.commit }}
+        WAQT_COMMIT_MESSAGE: ${{ inputs.commit_message }}
+      run: python3 "${{ github.action_path }}/update.py"

@@ -465,6 +465,27 @@ function renderShare() {
     $('#t-waka'),
     `- uses: athul/waka-readme@master\n  with:\n    WAKATIME_API_KEY: \${{ secrets.WAQT_API_KEY }}\n    API_BASE_URL: ${origin}/api`,
   );
+  codeBlock($('#r-markers'), '<!--START_SECTION:waqt-->\n<!--END_SECTION:waqt-->');
+  codeBlock(
+    $('#r-workflow'),
+    `name: Waqt stats
+on:
+  schedule:
+    - cron: '17 */6 * * *'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: mohdrafey1/waqt/readme-action@main
+        with:
+          url: ${origin}
+          api_key: \${{ secrets.WAQT_API_KEY }}
+          range: last_7_days`,
+  );
   if (!settings.public_enabled) {
     $('#c-preview').innerHTML = '<div class="muted">Your public profile is off. Turn it on in Settings to use cards and embeds.</div>';
   }
