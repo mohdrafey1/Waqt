@@ -62,7 +62,7 @@ describe('files and branches', () => {
 
 describe('recomputing a day', () => {
   it('writes only rows that changed', async () => {
-    const { replaceDayStatements } = await import('../src/summaries');
+    const { syncDaysStatements } = await import('../src/summaries');
     const { env } = await import('./helpers');
     const day = '2019-08-01';
     const sum = {
@@ -71,8 +71,10 @@ describe('recomputing a day', () => {
       ai: [] as any,
       files: [['p', 'main', 'a.go', 120], ['q', 'main', 'b.go', 60]] as any,
     };
-    const written = async (s: typeof sum) =>
-      (await env.DB.batch(replaceDayStatements(env.DB, day, 'live', s))).reduce((a, r) => a + (r.meta.rows_written || 0), 0);
+    const written = async (s: typeof sum) => {
+      const stmts = await syncDaysStatements(env.DB, 'live', [{ day, sum: s }]);
+      return stmts.length ? (await env.DB.batch(stmts)).reduce((a, r) => a + (r.meta.rows_written || 0), 0) : 0;
+    };
     expect(await written(sum)).toBeGreaterThan(0);
     expect(await written(sum)).toBe(0); // nothing changed, nothing written
     const changed = { ...sum, rows: [sum.rows[0]], files: [['p', 'main', 'a.go', 150]] as any };
@@ -83,5 +85,27 @@ describe('recomputing a day', () => {
     expect(rows.results).toEqual([{ project: 'p', seconds: 120 }]);
     const files = await env.DB.prepare('SELECT entity, seconds FROM daily_files WHERE day = ?1').bind(day).all();
     expect(files.results).toEqual([{ entity: 'a.go', seconds: 150 }]);
+  });
+});
+
+describe('importing the same history again', () => {
+  it('writes nothing when nothing changed', async () => {
+    const { usageReport } = await import('../src/usage');
+    const days = Array.from({ length: 5 }, (_, d) => ({
+      day: `2018-03-0${d + 1}`,
+      rows: [['re', 'Go', 'Vim', 'Linux', 'm', 'coding', 600, 0, 0]],
+      hours: [[9, 600]],
+      ai: [],
+      files: [['re', 'main', 'a.go', 600]],
+    }));
+    const { post, auth, json } = await import('./helpers');
+    await post('/api/v1/users/current/import/days', { days });
+    const writes = async () => (await json('/api/v1/users/current/usage', { headers: auth })).body.data.today.rows_written as number;
+    const a = await writes();
+    const b = await writes();
+    await post('/api/v1/users/current/import/days', { days });
+    const c = await writes();
+    expect(c - b - (b - a)).toBeLessThanOrEqual(1); // at most the import-totals note
+    expect(typeof usageReport).toBe('function');
   });
 });

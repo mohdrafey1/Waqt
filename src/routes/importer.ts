@@ -3,7 +3,7 @@ import { authHeader, forwardKey, importToken, wakatimeReason } from '../forward'
 import { type AppEnv, type C, requireAuth } from '../http';
 import { Settings, saveSettings, tzOf } from '../settings';
 import { clearCache } from '../stats';
-import { replaceDaysStatements } from '../summaries';
+import { syncDaysStatements } from '../summaries';
 import { dayOf, dayStart, isDay } from '../time';
 
 // Import your history from WakaTime.
@@ -248,7 +248,8 @@ importer.post('/days', async (c) => {
     });
   }
   if (clean.length) {
-    await c.env.DB.batch(replaceDaysStatements(c.env.DB, 'import', clean));
+    const stmts = await syncDaysStatements(c.env.DB, 'import', clean);
+    if (stmts.length) await c.env.DB.batch(stmts);
     if (s.import_summary) await saveSettings(c.env.DB, { import_summary: '' });
   }
   return c.json({ data: { stored: clean.length, skipped: days.length - clean.length } });

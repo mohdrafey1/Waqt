@@ -29,7 +29,7 @@ export async function recomputeDay(env: Env, s: Settings, day: string, markedAt:
 
   const sum = summarizeDay(results, start, end, timeout);
   await env.DB.batch([
-    ...replaceDayStatements(env.DB, day, 'live', sum),
+    ...(await syncDaysStatements(env.DB, 'live', [{ day, sum }])),
     // Only clear the flag if no newer heartbeat re-marked the day while we worked.
     env.DB.prepare('DELETE FROM dirty_days WHERE day = ?1 AND marked_at <= ?2').bind(day, markedAt),
   ]);
@@ -44,75 +44,76 @@ const TABLES: [table: string, keys: string[], values: string[]][] = [
   ['daily_files', ['project', 'branch', 'entity'], ['seconds']],
 ];
 
-/**
- * Statements that make one day's totals from one source ('live' or 'import') match
- * `sum`. Only rows that changed are written: today is recomputed every few minutes
- * while you code, and D1's free plan counts every row written (deletes included).
- */
-export function replaceDayStatements(db: D1Database, day: string, source: string, sum: DaySummary): D1PreparedStatement[] {
-  const data: Record<string, unknown[][]> = {
-    daily_summaries: sum.rows,
-    daily_hours: sum.hours,
-    daily_ai: sum.ai,
-    daily_files: sum.files || [],
-  };
-  const j = (i: number) => `json_extract(j.value, '$[${i}]')`;
-  const out: D1PreparedStatement[] = [];
-  for (const [table, keys, values] of TABLES) {
-    const json = JSON.stringify(data[table]);
-    const cols = [...keys, ...values];
-    out.push(
-      // Rows that no longer exist…
-      db.prepare(
-        `DELETE FROM ${table} WHERE day = ?1 AND source = ?2
-         AND NOT EXISTS (SELECT 1 FROM json_each(?3) AS j WHERE ${keys.map((k, i) => `${j(i)} = ${table}.${k}`).join(' AND ')})`,
-      ).bind(day, source, json),
-      // …then new rows, and changed values only.
-      db.prepare(
-        `INSERT INTO ${table} (day, source, ${cols.join(', ')})
-         SELECT ?1, ?2, ${cols.map((_, i) => j(i)).join(', ')} FROM json_each(?3) AS j WHERE true
-         ON CONFLICT(day, source, ${keys.join(', ')}) DO UPDATE SET ${values.map((v) => `${v} = excluded.${v}`).join(', ')}
-         WHERE ${values.map((v) => `${v} IS NOT excluded.${v}`).join(' OR ')}`,
-      ).bind(day, source, json),
-    );
-  }
-  return out;
-}
+type DaySum = { day: string; sum: Omit<DaySummary, 'files'> & { files?: DaySummary['files'] } };
+type Row = unknown[];
 
-type DayRows = { day: string; sum: Omit<DaySummary, 'files'> & { files?: DaySummary['files'] } };
+const keyOf = (r: Row, n: number) => r.slice(0, n + 1).map(String).join('\u0000');
+const same = (a: unknown, b: unknown) =>
+  typeof a === 'number' && typeof b === 'number' ? Math.abs(a - b) < 1e-6 : String(a ?? '') === String(b ?? '');
 
 /**
- * Replace many days of one source in 8 statements (instead of 8 per day),
- * which keeps imports well inside D1's per-request query limit.
+ * Statements that make the stored totals of `days` (from one source, 'live' or 'import')
+ * match the new ones. What's stored is read first, so only rows that are new, changed or
+ * gone are written: today is recalculated every few minutes while you code and imports
+ * get run again, and D1's free plan counts every row written (deletes included).
  */
-export function replaceDaysStatements(db: D1Database, source: string, days: DayRows[]): D1PreparedStatement[] {
-  const list = JSON.stringify(days.map((d) => d.day));
-  const rows = days.flatMap((d) => d.sum.rows.map((r) => [d.day, ...r]));
-  const hours = days.flatMap((d) => d.sum.hours.map((h) => [d.day, ...h]));
-  const ai = days.flatMap((d) => d.sum.ai.map((a) => [d.day, ...a]));
-  const files = days.flatMap((d) => (d.sum.files || []).map((f) => [d.day, ...f]));
-  const j = (i: number) => `json_extract(value, '$[${i}]')`;
-  return [
-    db.prepare('DELETE FROM daily_summaries WHERE source = ?1 AND day IN (SELECT value FROM json_each(?2))').bind(source, list),
-    db.prepare('DELETE FROM daily_hours WHERE source = ?1 AND day IN (SELECT value FROM json_each(?2))').bind(source, list),
-    db.prepare('DELETE FROM daily_ai WHERE source = ?1 AND day IN (SELECT value FROM json_each(?2))').bind(source, list),
-    db.prepare('DELETE FROM daily_files WHERE source = ?1 AND day IN (SELECT value FROM json_each(?2))').bind(source, list),
-    db.prepare(
-      `INSERT INTO daily_summaries (day, source, project, language, editor, os, machine, category, seconds, ai_lines, human_lines)
-       SELECT ${j(0)}, ?1, ${[1, 2, 3, 4, 5, 6, 7, 8, 9].map(j).join(', ')} FROM json_each(?2)`,
-    ).bind(source, JSON.stringify(rows)),
-    db.prepare(`INSERT INTO daily_hours (day, source, hour, seconds) SELECT ${j(0)}, ?1, ${j(1)}, ${j(2)} FROM json_each(?2)`).bind(
-      source,
-      JSON.stringify(hours),
+export async function syncDaysStatements(db: D1Database, source: string, days: DaySum[]): Promise<D1PreparedStatement[]> {
+  if (!days.length) return [];
+  const dayList = JSON.stringify(days.map((d) => d.day));
+  const stored = await db.batch(
+    TABLES.map(([table, keys, values]) =>
+      db
+        .prepare(`SELECT day, ${[...keys, ...values].join(', ')} FROM ${table} WHERE source = ?1 AND day IN (SELECT value FROM json_each(?2))`)
+        .bind(source, dayList),
     ),
-    db.prepare(
-      `INSERT INTO daily_ai (day, source, model, seconds, sessions, prompts, input_tokens, output_tokens, cached_tokens, ai_lines)
-       SELECT ${j(0)}, ?1, ${[1, 2, 3, 4, 5, 6, 7, 8].map(j).join(', ')} FROM json_each(?2)`,
-    ).bind(source, JSON.stringify(ai)),
-    db.prepare(
-      `INSERT INTO daily_files (day, source, project, branch, entity, seconds) SELECT ${j(0)}, ?1, ${[1, 2, 3, 4].map(j).join(', ')} FROM json_each(?2)`,
-    ).bind(source, JSON.stringify(files)),
-  ];
+  );
+  const fresh: Record<string, Row[]> = {
+    daily_summaries: days.flatMap((d) => d.sum.rows.map((r) => [d.day, ...r])),
+    daily_hours: days.flatMap((d) => d.sum.hours.map((r) => [d.day, ...r])),
+    daily_ai: days.flatMap((d) => d.sum.ai.map((r) => [d.day, ...r])),
+    daily_files: days.flatMap((d) => (d.sum.files || []).map((r) => [d.day, ...r])),
+  };
+  const j = (i: number) => `json_extract(value, '$[${i}]')`;
+  const out: D1PreparedStatement[] = [];
+  TABLES.forEach(([table, keys, values], t) => {
+    const cols = ['day', ...keys, ...values];
+    const old = new Map<string, Row>();
+    for (const r of stored[t].results as Record<string, unknown>[]) {
+      const row = cols.map((c) => r[c]);
+      old.set(keyOf(row, keys.length), row);
+    }
+    const upserts: Row[] = [];
+    const seen = new Set<string>();
+    for (const row of fresh[table]) {
+      const k = keyOf(row, keys.length);
+      if (seen.has(k)) continue;
+      seen.add(k);
+      const prev = old.get(k);
+      if (!prev || values.some((_, i) => !same(prev[keys.length + 1 + i], row[keys.length + 1 + i]))) upserts.push(row);
+    }
+    const gone = [...old.entries()].filter(([k]) => !seen.has(k)).map(([, r]) => r.slice(0, keys.length + 1));
+    if (gone.length) {
+      out.push(
+        db
+          .prepare(
+            `DELETE FROM ${table} WHERE source = ?1 AND (day, ${keys.join(', ')}) IN (SELECT ${['day', ...keys].map((_, i) => j(i)).join(', ')} FROM json_each(?2))`,
+          )
+          .bind(source, JSON.stringify(gone)),
+      );
+    }
+    if (upserts.length) {
+      out.push(
+        db
+          .prepare(
+            `INSERT INTO ${table} (day, source, ${cols.slice(1).join(', ')})
+             SELECT ${j(0)}, ?1, ${cols.slice(1).map((_, i) => j(i + 1)).join(', ')} FROM json_each(?2) WHERE true
+             ON CONFLICT(day, source, ${keys.join(', ')}) DO UPDATE SET ${values.map((v) => `${v} = excluded.${v}`).join(', ')}`,
+          )
+          .bind(source, JSON.stringify(upserts)),
+      );
+    }
+  });
+  return out;
 }
 
 /** Recalculate up to `max` days that changed, newest first. Returns how many were done. */
