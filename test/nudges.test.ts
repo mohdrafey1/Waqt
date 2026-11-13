@@ -85,3 +85,24 @@ describe('Telegram errors', () => {
     await saveSettings(env.DB, { report_telegram_token: '', report_telegram_chat: '' });
   });
 });
+
+describe('Telegram test report, end to end', () => {
+  it('sends with exactly the token that was pasted', async () => {
+    const token = ['8123456789', 'AAF-k3x_' + 'Ab9'.repeat(9)].join(':');
+    const urls: string[] = [];
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input: any) => {
+      const url = String(input.url || input);
+      urls.push(url);
+      if (!url.includes(`/bot${token}/`)) return Response.json({ ok: false, description: 'Unauthorized' }, { status: 401 });
+      if (url.endsWith('/getMe')) return Response.json({ ok: true, result: { username: 'rafey_waqt_bot' } });
+      return Response.json({ ok: true, result: {} });
+    });
+    const pasted = `Here is the token for bot Waqt @rafey_waqt_bot:\n\n${token}\n\nRevoke current token`;
+    expect((await put('/api/v1/users/current/settings', { report_telegram_token: pasted, report_telegram_chat: '1428569062', report_discord: '' })).status).toBe(200);
+    const r = (await post('/api/v1/users/current/report/test', {}, {}, { TELEGRAM_API_URL: 'https://telegram.test' } as any)).body.data;
+    expect(r.errors).toEqual([]);
+    expect(r.sent).toEqual(['Telegram']);
+    expect(r.telegram).toMatchObject({ ok: true, bot: '@rafey_waqt_bot', saved_bot_id: '8123456789' });
+    await saveSettings(env.DB, { report_telegram_token: '', report_telegram_chat: '' });
+  });
+});

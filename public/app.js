@@ -1128,8 +1128,13 @@ $('#s-report-test').onclick = async () => {
   }
   try {
     const { data } = await api('/users/current/report/test', { method: 'POST' });
-    $('#s-report-result').textContent =
-      (data.sent.length ? `Sent to ${data.sent.join(' and ')}. ` : '') + data.errors.join(' ');
+    const t = data.telegram;
+    const bot = !t
+      ? ''
+      : t.ok
+        ? ` The saved token is for ${t.bot}.`
+        : ` The saved token starts with ${t.saved_bot_id}: and is ${t.saved_length} characters long; Telegram says "${t.error}" for it.`;
+    $('#s-report-result').textContent = (data.sent.length ? `Sent to ${data.sent.join(' and ')}. ` : '') + data.errors.join(' ') + bot;
   } catch (e) {
     $('#s-report-result').textContent = e.message;
   }

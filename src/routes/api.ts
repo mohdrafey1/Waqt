@@ -5,7 +5,7 @@ import { MAX_BATCH, ingest } from '../ingest';
 import { importer } from './importer';
 import { backup } from './backup';
 import { account, auth } from './auth';
-import { buildReport, sendReport } from '../report';
+import { buildReport, sendReport, telegramBot } from '../report';
 import { reparseUserAgents } from '../maintenance';
 import { usageReport } from '../usage';
 import { versionInfo } from '../version';
@@ -281,8 +281,14 @@ api.get('/users/current/settings', requireAuth, async (c) => {
 api.post('/users/current/report/test', requireAuth, async (c) => {
   const s = c.get('settings');
   const r = await buildReport(c.env, s, todayIn(tzOf(s)), s.site_url);
-  const result = await sendReport(c.env, s, r);
-  return c.json({ data: { ...result, preview: [r.title, ...r.lines] } });
+  const [result, telegram] = await Promise.all([sendReport(c.env, s, r), telegramBot(c.env, s)]);
+  return c.json({
+    data: {
+      ...result,
+      telegram: telegram && { ...telegram, saved_bot_id: s.report_telegram_token.split(':')[0], saved_length: s.report_telegram_token.length },
+      preview: [r.title, ...r.lines],
+    },
+  });
 });
 
 // Time per day and project (after renames), with labels and rates, for Timesheets.

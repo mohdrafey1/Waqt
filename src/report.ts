@@ -81,6 +81,23 @@ function toTelegramHtml(r: Report): string {
   return [`<b>${esc(r.title)}</b>`, ...r.lines.map(bold)].join('\n').slice(0, 4000);
 }
 
+function telegramBase(env: Env): string {
+  return ((env as { TELEGRAM_API_URL?: string }).TELEGRAM_API_URL || 'https://api.telegram.org').replace(/\/+$/, '');
+}
+
+/** Ask Telegram which bot the saved token belongs to ("@name"), or why it refuses it. */
+export async function telegramBot(env: Env, s: Settings): Promise<{ ok: boolean; bot?: string; error?: string } | null> {
+  if (!s.report_telegram_token) return null;
+  try {
+    const res = await fetch(`${telegramBase(env)}/bot${s.report_telegram_token}/getMe`);
+    const body = (await res.json().catch(() => ({}))) as { ok?: boolean; description?: string; result?: { username?: string } };
+    if (body.ok && body.result?.username) return { ok: true, bot: '@' + body.result.username };
+    return { ok: false, error: body.description || `status ${res.status}` };
+  } catch (e) {
+    return { ok: false, error: String((e as Error).message || e) };
+  }
+}
+
 export async function sendReport(env: Env, s: Settings, r: Report): Promise<{ sent: string[]; errors: string[] }> {
   const sent: string[] = [];
   const errors: string[] = [];
@@ -98,7 +115,7 @@ export async function sendReport(env: Env, s: Settings, r: Report): Promise<{ se
     }
   }
   if (s.report_telegram_token && s.report_telegram_chat) {
-    const base = ((env as { TELEGRAM_API_URL?: string }).TELEGRAM_API_URL || 'https://api.telegram.org').replace(/\/+$/, '');
+    const base = telegramBase(env);
     try {
       const res = await fetch(`${base}/bot${s.report_telegram_token}/sendMessage`, {
         method: 'POST',

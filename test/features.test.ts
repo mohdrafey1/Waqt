@@ -176,9 +176,10 @@ describe('weekly report', () => {
     const r = (await post('/api/v1/users/current/report/test', {})).body.data;
     expect(r.sent).toEqual(['Discord', 'Telegram']);
     expect(r.preview[0]).toMatch(/Your coding week/);
-    expect(calls[0].body.content).toMatch(/daily goal/);
-    expect(calls[1].url).toMatch(/api\.telegram\.org\/bot123456789:.+\/sendMessage$/);
-    expect(calls[1].body).toMatchObject({ chat_id: '42', parse_mode: 'HTML' });
+    expect(calls.find((x) => x.url.includes('discord'))!.body.content).toMatch(/daily goal/);
+    const tg = calls.find((x) => x.url.endsWith('/sendMessage'))!;
+    expect(tg.url).toMatch(/api\.telegram\.org\/bot123456789:.+\/sendMessage$/);
+    expect(tg.body).toMatchObject({ chat_id: '42', parse_mode: 'HTML' });
   });
 
   it('goes out once, on Monday from 9:00 local time', async () => {
