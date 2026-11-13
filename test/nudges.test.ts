@@ -54,3 +54,20 @@ describe('nudges', () => {
     await saveSettings(env.DB, { nudge_goal: '0', nudge_streak: '0' });
   });
 });
+
+describe('Telegram settings', () => {
+  it('picks the token and chat ID out of pasted messages', async () => {
+    const token = ['1234567890', 'AAH' + 'x'.repeat(32)].join(':');
+    const r = await put('/api/v1/users/current/settings', {
+      report_telegram_token: `Done! Use this token to access the HTTP API:\n${token}\nKeep your token secure`,
+      report_telegram_chat: 'Id: 987654321\nFirst: Rafey',
+    });
+    expect(r.status).toBe(200);
+    const s = await loadSettings(env.DB);
+    expect(s.report_telegram_token).toBe(token);
+    expect(s.report_telegram_chat).toBe('987654321');
+    const bad = await put('/api/v1/users/current/settings', { report_telegram_token: '@rafey_waqt_bot' });
+    expect(bad.status).toBe(400);
+    await put('/api/v1/users/current/settings', { report_telegram_token: '', report_telegram_chat: '' });
+  });
+});

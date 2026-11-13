@@ -523,14 +523,19 @@ api.put('/users/current/settings', requireAuth, async (c) => {
     else errors.push('The Discord webhook should start with https://discord.com/api/webhooks/');
   }
   if (typeof body.report_telegram_token === 'string') {
-    const t = body.report_telegram_token.trim();
-    if (!t || /^\d+:[A-Za-z0-9_-]{20,}$/.test(t)) out.report_telegram_token = t;
-    else errors.push('The Telegram bot token looks like 123456789:ABC… (from @BotFather)');
+    // Accept BotFather's whole message too: pick the token out of it.
+    const raw = body.report_telegram_token.trim();
+    const t = raw ? (raw.match(/\d{5,}:[A-Za-z0-9_-]{20,}/) || [''])[0] : '';
+    if (!raw || t) out.report_telegram_token = t;
+    else errors.push("That isn't a bot token. BotFather sends it after /newbot; it looks like 123456789:AAH… (not the bot's @username).");
   }
   if ('report_telegram_chat' in body) {
-    const chat = String(body.report_telegram_chat ?? '').trim();
-    if (!chat || /^-?\d{1,20}$|^@[A-Za-z0-9_]{4,}$/.test(chat)) out.report_telegram_chat = chat;
-    else errors.push('The Telegram chat ID is a number (or @channel)');
+    // Accept @userinfobot's reply ("Id: 123456789") too.
+    const raw = String(body.report_telegram_chat ?? '').trim();
+    const chat =
+      raw.match(/^@[A-Za-z0-9_]{4,}$/)?.[0] || raw.match(/^-?\d{1,20}$/)?.[0] || raw.match(/\bid\W{0,3}(-?\d{1,20})/i)?.[1] || raw.match(/-?\d{5,20}/)?.[0] || '';
+    if (!raw || chat) out.report_telegram_chat = chat;
+    else errors.push('The Telegram chat ID is a number: send /start to @userinfobot and copy the Id it replies with.');
   }
   if ('label_rates' in body) {
     const r = body.label_rates;

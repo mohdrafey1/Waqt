@@ -8,6 +8,7 @@ dashboard tells you when a new version is out.
 
 ### Fixed
 - When the free plan's daily database limit is used up, Waqt says so (instead of "Database is not ready") and asks editors to resend later, so no activity is lost.
+- The Telegram fields accept what you paste from BotFather and @userinfobot (the whole message is fine) and explain clearly what's wrong otherwise.
 - **Importing again no longer rewrites everything.** Waqt compares with what's stored and writes only days and rows that changed, so a repeat import of the same history costs almost no writes (it used to rewrite every row, about 70,000 for a year). Recalculating today's totals works the same way and reads far less.
 - **Far fewer database reads**, so busy days stay inside the free plan's 5 million a day. A year of stats reads each row about four times instead of sixteen, long ranges in the dashboard are cached for 5 minutes, and the Setup and Settings pages no longer count whole tables (the heartbeat count, backup info and import totals now cost a handful of reads).
 - Browser extensions and web-view apps (user agents starting with `Mozilla/5.0`) now show as Chrome, Safari, Firefox, Edge, Slack and so on, instead of "AppleWebKit", and imports no longer list "Mozilla" as an AI model.
