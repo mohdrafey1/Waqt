@@ -71,3 +71,17 @@ describe('Telegram settings', () => {
     await put('/api/v1/users/current/settings', { report_telegram_token: '', report_telegram_chat: '' });
   });
 });
+
+describe('Telegram errors', () => {
+  it('says plainly when Telegram rejects the bot token', async () => {
+    const { sendReport } = await import('../src/report');
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async () => Response.json({ ok: false, description: 'Unauthorized' }, { status: 401 }));
+    await saveSettings(env.DB, { report_telegram_token: '123:abc', report_telegram_chat: '42', report_discord: '' });
+    const r = await sendReport({ ...env, TELEGRAM_API_URL: 'https://telegram.test' } as any, await loadSettings(env.DB), { title: 't', lines: [] });
+    expect(r.errors[0]).toContain("doesn't recognise the bot token");
+    const s = (await json('/api/v1/users/current/settings', { headers: auth })).body.data;
+    expect(s.report_telegram_bot).toBe('123');
+    expect(JSON.stringify(s)).not.toContain('abc');
+    await saveSettings(env.DB, { report_telegram_token: '', report_telegram_chat: '' });
+  });
+});

@@ -234,6 +234,8 @@ export function publicSettingsView(s: Settings) {
     // Secrets are never sent back in full, only whether they're set.
     report_discord_set: !!s.report_discord,
     report_telegram_set: !!(s.report_telegram_token && s.report_telegram_chat),
+    // The number before the colon is the bot's public id, not part of the secret.
+    report_telegram_bot: s.report_telegram_token ? s.report_telegram_token.split(':')[0] : '',
     report_telegram_chat: s.report_telegram_chat,
     site_url: s.site_url,
     ai_prices: s.ai_prices,

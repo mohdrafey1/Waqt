@@ -1071,7 +1071,9 @@ function renderSettings() {
   $('#s-discord').value = '';
   $('#s-discord').placeholder = settings.report_discord_set ? 'Saved (type a new URL to replace, or clear below)' : 'https://discord.com/api/webhooks/…';
   $('#s-tg-token').value = '';
-  $('#s-tg-token').placeholder = settings.report_telegram_set ? 'Saved (type a new token to replace)' : '123456789:ABC…';
+  $('#s-tg-token').placeholder = settings.report_telegram_bot
+    ? `Saved for bot ${settings.report_telegram_bot}… (paste a new token to replace)`
+    : '123456789:ABC…';
   $('#s-tg-chat').value = settings.report_telegram_chat || '';
   $('#s-report-result').textContent = '';
   $('#s-err').textContent = '';

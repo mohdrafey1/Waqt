@@ -108,7 +108,16 @@ export async function sendReport(env: Env, s: Settings, r: Report): Promise<{ se
       if (res.ok) sent.push('Telegram');
       else {
         const body = (await res.json().catch(() => ({}))) as { description?: string };
-        errors.push(`Telegram: ${body.description || `status ${res.status}`}. Check the bot token and chat ID, and send your bot a message first.`);
+        const d = body.description || `status ${res.status}`;
+        const hint =
+          res.status === 401 || res.status === 404
+            ? "Telegram doesn't recognise the bot token. Copy it again from @BotFather: send /mybots, pick your bot, tap API Token."
+            : /chat not found/i.test(d)
+              ? "Telegram can't find that chat. Open your bot, tap Start, and check the Id from @userinfobot."
+              : res.status === 403
+                ? "Open your bot in Telegram and tap Start (and make sure it isn't blocked)."
+                : 'Check the bot token and chat ID.';
+        errors.push(`Telegram: ${d}. ${hint}`);
       }
     } catch (e) {
       errors.push(`Telegram: ${String((e as Error).message || e)}`);
