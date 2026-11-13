@@ -68,6 +68,12 @@ describe('Telegram settings', () => {
     expect(s.report_telegram_chat).toBe('987654321');
     const bad = await put('/api/v1/users/current/settings', { report_telegram_token: '@rafey_waqt_bot' });
     expect(bad.status).toBe(400);
+    // A space slipped in while copying: joined, never cut off at the space.
+    const [id, secret] = token.split(':');
+    await put('/api/v1/users/current/settings', { report_telegram_token: `${id}:${secret.slice(0, 21)} ${secret.slice(21)}` });
+    expect((await loadSettings(env.DB)).report_telegram_token).toBe(token);
+    // A cut-off token is refused instead of saved.
+    expect((await put('/api/v1/users/current/settings', { report_telegram_token: `${id}:${secret.slice(0, 21)}` })).status).toBe(400);
     await put('/api/v1/users/current/settings', { report_telegram_token: '', report_telegram_chat: '' });
   });
 });

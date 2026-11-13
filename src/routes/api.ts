@@ -529,11 +529,15 @@ api.put('/users/current/settings', requireAuth, async (c) => {
     else errors.push('The Discord webhook should start with https://discord.com/api/webhooks/');
   }
   if (typeof body.report_telegram_token === 'string') {
-    // Accept BotFather's whole message too: pick the token out of it.
     const raw = body.report_telegram_token.trim();
-    const t = raw ? (raw.match(/\d{5,}:[A-Za-z0-9_-]{20,}/) || [''])[0] : '';
+    // Just the token, perhaps with a stray space or line break from copying on a phone…
+    const compact = raw.replace(/[\s\u200b-\u200d\ufeff]+/g, '');
+    // …or BotFather's whole message, with the token on its own somewhere in it.
+    const t = /^\d{5,}:[A-Za-z0-9_-]{30,}$/.test(compact)
+      ? compact
+      : (raw.match(/\d{5,}:[A-Za-z0-9_-]{30,}(?![A-Za-z0-9_-])/) || [''])[0];
     if (!raw || t) out.report_telegram_token = t;
-    else errors.push("That isn't a bot token. BotFather sends it after /newbot; it looks like 123456789:AAH… (not the bot's @username).");
+    else errors.push("That isn't a whole bot token. It's a number, a colon and about 35 letters and digits (123456789:AAH…), from @BotFather → /mybots → your bot → API Token.");
   }
   if ('report_telegram_chat' in body) {
     // Accept @userinfobot's reply ("Id: 123456789") too.
